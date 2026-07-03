@@ -47,13 +47,17 @@ implementation's runner over the shared corpus and produces a compliance report.
 | Path | What |
 |---|---|
 | [`spec/l-log.schema.json`](spec/l-log.schema.json) | The formal spec: the logical op-log JSON Schema |
-| [`spec/expected-output.schema.json`](spec/expected-output.schema.json) | The golden format each spec is checked against (decoded-rows keyed by field-id) |
+| [`spec/expected-output.schema.json`](spec/expected-output.schema.json) | The golden format each fixture is checked against (decoded-rows keyed by field-id) |
 | [`spec/runner-contract.md`](spec/runner-contract.md) | What a runner binary accepts/emits; exit codes; emit-only rule |
-| [`specs/`](specs/) | Example op-logs (YAML authoring profile) + their `expected.json` goldens |
+| [`fixtures/`](fixtures/) | Example fixtures — an op-log (`fixture.yaml`, YAML authoring profile) + its `expected.json` golden |
 | [`runners/go/supports.yaml`](runners/go/supports.yaml) | What iceberg-go claims to support + declared gaps |
 | [`DESIGN.md`](DESIGN.md) | The design rationale and how it relates to prior art |
 
 ## The example corpus
+
+> Terminology: **spec** is the framework (the format, schemas, and runner contract under
+> `spec/`); a **fixture** is one individual test under `fixtures/` — an op-log
+> (`fixture.yaml`) plus its `expected.json` golden.
 
 - **`v2_append_posdelete_timetravel`** — append + merge-on-read position delete +
   time-travel. Authored golden.
@@ -66,7 +70,7 @@ implementation's runner over the shared corpus and produces a compliance report.
 
 ## Golden format
 
-Each authored spec has an `expected.json` in the read-side fixture vocabulary from
+Each authored fixture has an `expected.json` in the read-side fixture vocabulary from
 [sungwy/iceberg-testing#2](https://github.com/sungwy/iceberg-testing/pull/2): rows keyed
 by field-id, values as a type-annotated tree (`{type, value}`, `{type: object, fields}`,
 `{type: array, elements}`, `{type: null}`; 64-bit integers as JSON strings). It extends

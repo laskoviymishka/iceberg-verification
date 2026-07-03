@@ -87,7 +87,7 @@ orchestrator to build the cross-implementation matrix.
 ## Support declaration and the matrix
 
 Each implementation ships a `supports.yaml` listing the features it claims. The
-orchestrator runs a runner only over specs whose required features it claims; a needed
+orchestrator runs a runner only over fixtures whose required features it claims; a needed
 feature that is *not* claimed yields an `unsupported` cell (the runner exits with the
 reserved unsupported code), distinct from a failure. A claimed feature that then fails is
 a real failure.

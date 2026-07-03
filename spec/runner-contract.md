@@ -15,7 +15,7 @@ runner --spec <l-log.json> --warehouse <dir> --out <canonical.json>
 ```
 
 - `--spec` — path to a canonical L-log JSON (validates against `l-log.schema.json`).
-- `--warehouse` — an empty directory the runner may use as a `file://` warehouse. The runner stands up whatever catalog it wants inside (iceberg-go: SQLite + `file://`). Fresh per spec; the runner owns its contents.
+- `--warehouse` — an empty directory the runner may use as a `file://` warehouse. The runner stands up whatever catalog it wants inside (iceberg-go: SQLite + `file://`). Fresh per fixture; the runner owns its contents.
 - `--out` — path to write canonical output JSON (validates against `expected-output.schema.json` — the runner emits the same shape the golden is written in; a blessed run *becomes* a golden).
 
 The runner:
@@ -64,12 +64,12 @@ supports:
   - evolve-schema.add-column
   - evolve-schema.promote-type
   - time-travel
-  # NOT listed (=> declared gaps, exit 4 if a spec needs them):
+  # NOT listed (=> declared gaps, exit 4 if a fixture needs them):
   #   delete.merge-on-read.equality
   #   delete.merge-on-read.deletion-vector
 ```
 
-The orchestrator runs each runner only over specs whose required features it claims. A feature key present here but a spec that then fails is a real failure; a feature absent here is an unsupported cell. Modeled on protobuf-conformance's failure-list discipline: a gap is an explicit, reviewable line, and an impl that starts supporting a feature must add the line (which lights up the matrix cell) — drift can't hide.
+The orchestrator runs each runner only over fixtures whose required features it claims. A feature key present here but a fixture that then fails is a real failure; a feature absent here is an unsupported cell. Modeled on protobuf-conformance's failure-list discipline: a gap is an explicit, reviewable line, and an impl that starts supporting a feature must add the line (which lights up the matrix cell) — drift can't hide.
 
 ## Extension path (do not build in v0, do not preclude)
 
