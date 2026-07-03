@@ -1,0 +1,55 @@
+{
+  "spec-id": "v2_append_posdelete_timetravel",
+  "accept": true,
+  "clause": "table-spec/row-level-deletes",
+  "note": "append 3 rows, merge-on-read positional delete of id=2, then time-travel back to the pre-delete snapshot. One observation per 'observe' entry in the op-log, in order. decoded-rows keyed by field-id (0=__rowkey, 1=id, 2=category); positional delete => delete-file content=1.",
+  "snapshots": [
+    { "ordinal": 0, "parent": null, "operation": "append",
+      "summary": { "total-records": 3, "added-records": 3 } },
+    { "ordinal": 1, "parent": 0, "operation": "delete",
+      "summary": { "total-records": 2, "deleted-records": 1, "total-delete-files": 1 },
+      "delete-files": [ { "content": 1, "format": "parquet" } ] }
+  ],
+  "observations": [
+    {
+      "at": "after-append",
+      "bind": "after-append",
+      "iceberg-schema": [
+        { "field-id": 0, "name": "__rowkey",  "type": "string" },
+        { "field-id": 1, "name": "id",        "type": "long" },
+        { "field-id": 2, "name": "category",  "type": "string" }
+      ],
+      "decoded-rows": [
+        { "0": { "type": "string", "value": "r1" }, "1": { "type": "long", "value": "1" }, "2": { "type": "string", "value": "a" } },
+        { "0": { "type": "string", "value": "r2" }, "1": { "type": "long", "value": "2" }, "2": { "type": "string", "value": "b" } },
+        { "0": { "type": "string", "value": "r3" }, "1": { "type": "long", "value": "3" }, "2": { "type": "string", "value": "a" } }
+      ]
+    },
+    {
+      "at": "after-delete",
+      "bind": "after-delete",
+      "iceberg-schema": [
+        { "field-id": 0, "name": "__rowkey",  "type": "string" },
+        { "field-id": 1, "name": "id",        "type": "long" },
+        { "field-id": 2, "name": "category",  "type": "string" }
+      ],
+      "decoded-rows": [
+        { "0": { "type": "string", "value": "r1" }, "1": { "type": "long", "value": "1" }, "2": { "type": "string", "value": "a" } },
+        { "0": { "type": "string", "value": "r3" }, "1": { "type": "long", "value": "3" }, "2": { "type": "string", "value": "a" } }
+      ]
+    },
+    {
+      "at": "after-append",
+      "iceberg-schema": [
+        { "field-id": 0, "name": "__rowkey",  "type": "string" },
+        { "field-id": 1, "name": "id",        "type": "long" },
+        { "field-id": 2, "name": "category",  "type": "string" }
+      ],
+      "decoded-rows": [
+        { "0": { "type": "string", "value": "r1" }, "1": { "type": "long", "value": "1" }, "2": { "type": "string", "value": "a" } },
+        { "0": { "type": "string", "value": "r2" }, "1": { "type": "long", "value": "2" }, "2": { "type": "string", "value": "b" } },
+        { "0": { "type": "string", "value": "r3" }, "1": { "type": "long", "value": "3" }, "2": { "type": "string", "value": "a" } }
+      ]
+    }
+  ]
+}

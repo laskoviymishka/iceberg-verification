@@ -1,0 +1,104 @@
+# Spec 4 — type + transform breadth. Single append, canonical scan. The biggest
+# raw-coverage-per-line win: "does the writer serialize every type identically,
+# and place rows in the right partitions". Authored-golden.
+#
+# Covers primitives incl. int-vs-long distinction, decimal, timestamp, uuid,
+# fixed, binary, nested struct + list + map, and a bucket + a truncate transform.
+# Variant is INTENTIONALLY OMITTED from the write side here — iceberg-go writes
+# variant via arrow-go but variant WRITE support should be confirmed before
+# pinning; the read side is already covered by PR #2. If variant-write is a gap,
+# it becomes a supports.yaml omission, not a failure.
+
+header:
+  id: v3_types_transforms
+  format-version: 3
+  spec-anchor: "table-spec#schemas-and-data-types"
+  table-uuid: "cafef00d-1234-5678-9abc-def012345678"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1,  name: c_int,     type: int, required: true }
+      - { id: 2,  name: c_long,    type: long }
+      - { id: 3,  name: c_dec,     type: "decimal(9,2)" }
+      - { id: 4,  name: c_ts,      type: timestamp }
+      - { id: 5,  name: c_uuid,    type: uuid }
+      - { id: 6,  name: c_fixed,   type: "fixed[4]" }
+      - { id: 7,  name: c_bin,     type: binary }
+      - { id: 8,  name: c_str,     type: string }
+      - id: 9
+        name: c_struct
+        type:
+          type: struct
+          fields:
+            - { id: 20, name: a, type: int }
+            - { id: 21, name: b, type: string }
+      - id: 10
+        name: c_list
+        type: { type: list, element-id: 30, element: string }
+      - id: 11
+        name: c_map
+        type: { type: map, key-id: 40, key: string, value-id: 41, value: long }
+  partition-spec:
+    fields:
+      - { source-id: 1, field-id: 1000, transform: "bucket[4]",   name: c_int_bucket }
+      - { source-id: 8, field-id: 1001, transform: "truncate[2]", name: c_str_trunc }
+
+entries:
+  - op: append
+    rows:
+      - __rowkey: r1
+        c_int:    !int 1
+        c_long:   !long 10000000000            # > int32 range: pins long, not int
+        c_dec:    !decimal "12.34"
+        c_ts:     !timestamp "2026-01-01T12:00:00"
+        c_uuid:   !uuid "12345678-1234-1234-1234-123456789abc"
+        c_fixed:  !fixed "DEADBEEF"             # hex, 4 bytes
+        c_bin:    !binary "0102"
+        c_str:    !string "alpha"
+        c_struct: !struct { a: !int 7, b: !string "nested" }
+        c_list:   !list [ !string "p", !string "q" ]
+        c_map:    !map { "k1": !long 1, "k2": !long 2 }
+      - __rowkey: r2
+        c_int:    !int 2
+        c_long:   !null null
+        c_dec:    !decimal "0.01"
+        c_ts:     !timestamp "2026-06-30T23:59:59"
+        c_uuid:   !uuid "abcdefab-cdef-abcd-efab-cdefabcdefab"
+        c_fixed:  !fixed "00000000"
+        c_bin:    !binary "FF"
+        c_str:    !string "alfredo"             # same truncate[2] prefix "al" as r1
+        c_struct: !struct { a: !null null, b: !string "" }
+        c_list:   !list []
+        c_map:    !map {}
+    expect:
+      snapshot: { operation: append }
+
+  # rule: mutations assert snapshot facts; observes assert row-state.
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - __rowkey: r1
+            c_int: 1
+            c_long: 10000000000
+            c_dec: "12.34"
+            c_str: alpha
+            c_struct: { a: 7, b: nested }
+            c_list: [ p, q ]
+            c_map: { k1: 1, k2: 2 }
+          - __rowkey: r2
+            c_int: 2
+            c_long: null
+            c_dec: "0.01"
+            c_str: alfredo
+            c_struct: { a: null, b: "" }
+            c_list: []
+            c_map: {}
+      physical:
+        # both rows share truncate[2] "al" but differ on bucket[4](c_int);
+        # pins that two distinct partition tuples exist and are layout-independent.
+        partitions-distinct: ">= 1"

@@ -1,0 +1,67 @@
+# Spec 1 — v2 append + merge-on-read POSITION delete + time-travel.
+# Authored-golden mode (expect present). Green on iceberg-go: MoR delete writes
+# position deletes today, which is exactly what this pins.
+#
+# NOTE: this is the position-delete case, NOT equality. Equality delete is a
+# declared gap for iceberg-go (see supports.yaml) — a separate spec would exit 4.
+
+header:
+  id: v2_append_posdelete_timetravel
+  format-version: 2
+  spec-anchor: "table-spec#row-level-deletes"
+  table-uuid: "9c12d441-03fe-4693-9a96-a0705ddf69c1"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,       type: long,   required: true }
+      - { id: 2, name: category, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, category: !string "a" }
+      - { __rowkey: r2, id: !long 2, category: !string "b" }
+      - { __rowkey: r3, id: !long 3, category: !string "a" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    bind: after-append
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 2, category: b }
+          - { id: 3, category: a }
+
+  - op: delete
+    strategy: merge-on-read
+    kind: position
+    predicate: { type: eq, term: id, value: !long 2 }
+    expect:
+      snapshot: { operation: delete }
+      delete-file: { content: 1 }          # positional (not a deletion vector, not equality)
+
+  # rule: mutations assert snapshot facts; observes assert row-state.
+  - op: observe
+    at: latest
+    bind: after-delete
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 3, category: a }
+
+  # time-travel: the pre-delete snapshot still reads all three rows
+  - op: observe
+    at: after-append
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 2, category: b }
+          - { id: 3, category: a }

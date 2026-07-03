@@ -1,0 +1,35 @@
+# What iceberg-go claims to support, verified against main (2026-07-03).
+# The orchestrator runs the go runner only over specs whose required features are
+# listed here. A listed feature that then fails = a real failure. An UNLISTED
+# feature a spec needs = exit 4 = a visible "unsupported" matrix cell (declared
+# gap). Removing a gap comment when support lands is what lights up the cell —
+# drift can't hide (protobuf-conformance failure-list discipline).
+
+implementation: iceberg-go
+version: main@2026-07-03      # replace with the pinned commit sha at PR time
+
+supports:
+  - append
+  - delete.copy-on-write
+  - delete.merge-on-read.position
+  - overwrite.copy-on-write
+  - rewrite                              # ReplaceDataFiles / rewrite_data_files
+  - evolve-schema.add-column
+  - evolve-schema.promote-type
+  - evolve-schema.drop-column
+  - evolve-schema.rename-column
+  - evolve-spec
+  - time-travel
+  - defaults                             # initial-default / write-default
+  - row-lineage                          # VERIFY against current v3 support before relying on it
+  - types.primitive
+  - types.decimal
+  - types.uuid
+  - types.fixed
+  - types.nested                         # struct/list/map
+
+# DECLARED GAPS (NOT supported today -> exit 4 -> empty matrix cell):
+#   delete.merge-on-read.equality        # Transaction.Delete writes position deletes only
+#   delete.merge-on-read.deletion-vector # MoR writes position deletes, not DVs
+#   types.variant.write                  # read covered (PR #1238); write support unconfirmed
+#   types.geometry / types.geography     # v3 geo, unconfirmed

@@ -1,0 +1,9 @@
+# Go
+/bin/
+*.test
+*.out
+# runner scratch warehouses
+/tmp/
+warehouse/
+# generated reports
+/report/

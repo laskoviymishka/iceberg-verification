@@ -1,0 +1,67 @@
+{
+  "spec-id": "v3_types_transforms",
+  "accept": true,
+  "clause": "table-spec/schemas-and-data-types",
+  "note": "single append of two rows over a wide type surface, one observation. decoded-rows keyed by field-id; c_long above int32 range is a long (JSON string); nested struct/list/map are type-annotated trees; SQL-null is {type,value:null}. Partition transforms bucket[4](c_int) + truncate[2](c_str) produce two distinct partition tuples.",
+  "snapshots": [
+    { "ordinal": 0, "parent": null, "operation": "append",
+      "summary": { "total-records": 2, "added-records": 2 } }
+  ],
+  "observations": [
+    {
+      "at": "latest",
+      "iceberg-schema": [
+        { "field-id": 0,  "name": "__rowkey", "type": "string" },
+        { "field-id": 1,  "name": "c_int",    "type": "int" },
+        { "field-id": 2,  "name": "c_long",   "type": "long" },
+        { "field-id": 3,  "name": "c_dec",    "type": "decimal(9,2)" },
+        { "field-id": 4,  "name": "c_ts",     "type": "timestamp" },
+        { "field-id": 5,  "name": "c_uuid",   "type": "uuid" },
+        { "field-id": 6,  "name": "c_fixed",  "type": "fixed[4]" },
+        { "field-id": 7,  "name": "c_bin",    "type": "binary" },
+        { "field-id": 8,  "name": "c_str",    "type": "string" },
+        { "field-id": 9,  "name": "c_struct", "type": "struct" },
+        { "field-id": 10, "name": "c_list",   "type": "list" },
+        { "field-id": 11, "name": "c_map",    "type": "map" }
+      ],
+      "decoded-rows": [
+        {
+          "0":  { "type": "string",  "value": "r1" },
+          "1":  { "type": "int",     "value": 1 },
+          "2":  { "type": "long",    "value": "10000000000" },
+          "3":  { "type": "decimal", "value": "12.34" },
+          "4":  { "type": "timestamp", "value": "2026-01-01T12:00:00" },
+          "5":  { "type": "uuid",    "value": "12345678-1234-1234-1234-123456789abc" },
+          "6":  { "type": "fixed",   "value": "DEADBEEF" },
+          "7":  { "type": "binary",  "value": "0102" },
+          "8":  { "type": "string",  "value": "alpha" },
+          "9":  { "type": "object",  "fields": {
+                    "a": { "type": "int",    "value": 7 },
+                    "b": { "type": "string", "value": "nested" } } },
+          "10": { "type": "array",   "elements": [
+                    { "type": "string", "value": "p" },
+                    { "type": "string", "value": "q" } ] },
+          "11": { "type": "object",  "fields": {
+                    "k1": { "type": "long", "value": "1" },
+                    "k2": { "type": "long", "value": "2" } } }
+        },
+        {
+          "0":  { "type": "string",  "value": "r2" },
+          "1":  { "type": "int",     "value": 2 },
+          "2":  { "type": "long",    "value": null },
+          "3":  { "type": "decimal", "value": "0.01" },
+          "4":  { "type": "timestamp", "value": "2026-06-30T23:59:59" },
+          "5":  { "type": "uuid",    "value": "abcdefab-cdef-abcd-efab-cdefabcdefab" },
+          "6":  { "type": "fixed",   "value": "00000000" },
+          "7":  { "type": "binary",  "value": "FF" },
+          "8":  { "type": "string",  "value": "alfredo" },
+          "9":  { "type": "object",  "fields": {
+                    "a": { "type": "int",    "value": null },
+                    "b": { "type": "string", "value": "" } } },
+          "10": { "type": "array",   "elements": [] },
+          "11": { "type": "object",  "fields": {} }
+        }
+      ]
+    }
+  ]
+}

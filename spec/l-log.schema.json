@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iceberg.apache.org/tck/l-log.schema.json",
+  "title": "Iceberg Logical Op-Log (L-log)",
+  "description": "A logical, engine-agnostic description of a table's life: DDL + an ordered sequence of DML operations, with optional per-step expectations (authored-golden mode) and/or metamorphic invariants (oracle mode). A runner executes this against one implementation and emits canonical output. Derived from the Iceberg table spec: type names, transform names, and snapshot operations are the spec's own vocabularies (see spec-anchor fields).",
+  "type": "object",
+  "required": ["header", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "header": { "$ref": "#/$defs/header" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+
+  "$defs": {
+
+    "header": {
+      "type": "object",
+      "required": ["format-version", "seeds", "schema"],
+      "additionalProperties": false,
+      "description": "Determinism contract + initial table definition. The seeds pin everything a writer would otherwise randomize, so a golden is reproducible.",
+      "properties": {
+        "id": { "type": "string", "description": "Stable spec id, e.g. v2_append_posdelete_timetravel" },
+        "format-version": { "type": "integer", "enum": [1, 2, 3] },
+        "spec-anchor": { "type": "string", "description": "L0 anchor: the spec clause this spec exercises" },
+        "table-uuid": { "type": "string", "description": "Pinned; writers randomize this otherwise" },
+        "seeds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["snapshot-id", "commit-ts"],
+          "properties": {
+            "snapshot-id": { "const": "sequential", "description": "snapshot-ids assigned 0,1,2... in commit order; canonicalizer renumbers references to match" },
+            "commit-ts": { "type": ["string", "integer"], "description": "fixed base commit timestamp" },
+            "file-paths": { "type": "string", "enum": ["templated"], "description": "data/delete file paths are templated, stripped from canonical output" }
+          }
+        },
+        "schema": { "$ref": "#/$defs/schema" },
+        "partition-spec": { "$ref": "#/$defs/partitionSpec" },
+        "sort-order": { "$ref": "#/$defs/sortOrder" },
+        "properties": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+
+    "schema": {
+      "type": "object",
+      "required": ["fields"],
+      "additionalProperties": false,
+      "properties": {
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["id", "name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "type": { "$ref": "#/$defs/icebergType" },
+        "required": { "type": "boolean", "default": false },
+        "doc": { "type": "string" },
+        "initial-default": { "$ref": "#/$defs/typedLiteral", "description": "v3: value read for existing rows when column added" },
+        "write-default": { "$ref": "#/$defs/typedLiteral", "description": "v3: value written when a row omits this column" }
+      }
+    },
+
+    "icebergType": {
+      "description": "Iceberg spec type. Primitive as a string (the spec type name), or a nested type object. Kept 1:1 with the spec type table so it is spec-derived, not invented.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "boolean", "int", "long", "float", "double", "date",
+            "time", "timestamp", "timestamptz", "timestamp_ns", "timestamptz_ns",
+            "string", "uuid", "binary",
+            "variant", "geometry", "geography"
+          ]
+        },
+        { "type": "string", "pattern": "^decimal\\\\(\\\\d+,\\\\s*\\\\d+\\\\)$", "description": "decimal(P,S)" },
+        { "type": "string", "pattern": "^fixed\\\\[\\\\d+\\\\]$", "description": "fixed[L]" },
+        { "$ref": "#/$defs/structType" },
+        { "$ref": "#/$defs/listType" },
+        { "$ref": "#/$defs/mapType" }
+      ]
+    },
+    "structType": {
+      "type": "object", "required": ["type", "fields"], "additionalProperties": false,
+      "properties": { "type": { "const": "struct" }, "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } } }
+    },
+    "listType": {
+      "type": "object", "required": ["type", "element-id", "element"], "additionalProperties": false,
+      "properties": {
+        "type": { "const": "list" }, "element-id": { "type": "integer" },
+        "element": { "$ref": "#/$defs/icebergType" }, "element-required": { "type": "boolean" }
+      }
+    },
+    "mapType": {
+      "type": "object", "required": ["type", "key-id", "key", "value-id", "value"], "additionalProperties": false,
+      "properties": {
+        "type": { "const": "map" },
+        "key-id": { "type": "integer" }, "key": { "$ref": "#/$defs/icebergType" },
+        "value-id": { "type": "integer" }, "value": { "$ref": "#/$defs/icebergType" },
+        "value-required": { "type": "boolean" }
+      }
+    },
+
+    "partitionSpec": {
+      "type": "object", "required": ["fields"], "additionalProperties": false,
+      "properties": {
+        "spec-id": { "type": "integer" },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source-id", "field-id", "transform", "name"],
+            "additionalProperties": false,
+            "properties": {
+              "source-id": { "type": "integer" },
+              "field-id": { "type": "integer" },
+              "name": { "type": "string" },
+              "transform": { "$ref": "#/$defs/transform" }
+            }
+          }
+        }
+      }
+    },
+    "transform": {
+      "description": "Partition transform. Spec transform names verbatim; parameterized forms match the spec grammar.",
+      "oneOf": [
+        { "type": "string", "enum": ["identity", "year", "month", "day", "hour", "void"] },
+        { "type": "string", "pattern": "^bucket\\\\[\\\\d+\\\\]$" },
+        { "type": "string", "pattern": "^truncate\\\\[\\\\d+\\\\]$" }
+      ]
+    },
+    "sortOrder": {
+      "type": "object", "required": ["order-id", "fields"], "additionalProperties": false,
+      "properties": {
+        "order-id": { "type": "integer" },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source-id", "transform", "direction", "null-order"],
+            "additionalProperties": false,
+            "properties": {
+              "source-id": { "type": "integer" },
+              "transform": { "$ref": "#/$defs/transform" },
+              "direction": { "type": "string", "enum": ["asc", "desc"] },
+              "null-order": { "type": "string", "enum": ["nulls-first", "nulls-last"] }
+            }
+          }
+        }
+      }
+    },
+
+    "typedLiteral": {
+      "description": "A value with its physical type made explicit, so int-vs-long (iceberg-go#880) and similar are authorable and pinnable. Exactly one key, the key being the spec type name. In the YAML authoring profile this renders as a tag, e.g. !int 1.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "boolean", "int", "long", "float", "double", "date",
+          "time", "timestamp", "timestamptz", "timestamp_ns", "timestamptz_ns",
+          "string", "uuid", "binary", "decimal", "fixed",
+          "variant", "geometry", "geography", "struct", "list", "map", "null"
+        ]
+      }
+    },
+
+    "row": {
+      "description": "One logical row. __rowkey is a synthetic stable identity (reserved) used to compare row-multisets across physical layouts and across engines; it is excluded from conformance comparison of user data. Field values are typed literals.",
+      "type": "object",
+      "required": ["__rowkey"],
+      "properties": {
+        "__rowkey": { "type": "string" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/typedLiteral" }
+    },
+
+    "predicate": {
+      "description": "Boolean expression over table fields. Mirrors the REST OpenAPI Expression grammar (spec-derived), reduced to the operators v1 needs.",
+      "oneOf": [
+        { "type": "object", "required": ["type"], "properties": { "type": { "enum": ["true", "false"] } }, "additionalProperties": false },
+        {
+          "type": "object", "required": ["type", "term", "value"], "additionalProperties": false,
+          "properties": {
+            "type": { "enum": ["eq", "ne", "lt", "lt-eq", "gt", "gt-eq"] },
+            "term": { "type": "string" },
+            "value": { "$ref": "#/$defs/typedLiteral" }
+          }
+        },
+        {
+          "type": "object", "required": ["type", "term"], "additionalProperties": false,
+          "properties": { "type": { "enum": ["is-null", "not-null"] }, "term": { "type": "string" } }
+        },
+        {
+          "type": "object", "required": ["type", "term", "values"], "additionalProperties": false,
+          "properties": { "type": { "enum": ["in", "not-in"] }, "term": { "type": "string" }, "values": { "type": "array", "items": { "$ref": "#/$defs/typedLiteral" } } }
+        },
+        {
+          "type": "object", "required": ["type", "args"], "additionalProperties": false,
+          "properties": { "type": { "enum": ["and", "or"] }, "args": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/predicate" } } }
+        },
+        {
+          "type": "object", "required": ["type", "arg"], "additionalProperties": false,
+          "properties": { "type": { "const": "not" }, "arg": { "$ref": "#/$defs/predicate" } }
+        }
+      ]
+    },
+
+    "entry": {
+      "description": "One op-log entry. Mutating ops produce exactly one snapshot. 'observe' produces none. Each carries optional 'expect' (authored-golden) and/or invariant (oracle).",
+      "oneOf": [
+        { "$ref": "#/$defs/opAppend" },
+        { "$ref": "#/$defs/opDelete" },
+        { "$ref": "#/$defs/opOverwrite" },
+        { "$ref": "#/$defs/opRewrite" },
+        { "$ref": "#/$defs/opEvolveSchema" },
+        { "$ref": "#/$defs/opEvolveSpec" },
+        { "$ref": "#/$defs/opObserve" }
+      ]
+    },
+
+    "opAppend": {
+      "type": "object", "required": ["op", "rows"], "additionalProperties": false,
+      "properties": {
+        "op": { "const": "append" },
+        "rows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/row" } },
+        "expect": { "$ref": "#/$defs/expect" }
+      }
+    },
+    "opDelete": {
+      "type": "object", "required": ["op", "predicate", "strategy"], "additionalProperties": false,
+      "properties": {
+        "op": { "const": "delete" },
+        "predicate": { "$ref": "#/$defs/predicate" },
+        "strategy": { "type": "string", "enum": ["copy-on-write", "merge-on-read"], "description": "spec-open choice; runner maps to impl (iceberg-go: write.delete.mode property)" },
+        "kind": { "type": "string", "enum": ["position", "equality", "deletion-vector"], "description": "MoR sub-kind. equality/deletion-vector may be unsupported by an impl -> declared gap." },
+        "equality-fields": { "type": "array", "items": { "type": "integer" }, "description": "required when kind=equality" },
+        "expect": { "$ref": "#/$defs/expect" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "equality" } }, "required": ["kind"] },
+          "then": { "required": ["equality-fields"] } }
+      ]
+    },
+    "opOverwrite": {
+      "type": "object", "required": ["op", "predicate", "rows", "strategy"], "additionalProperties": false,
+      "properties": {
+        "op": { "const": "overwrite" },
+        "predicate": { "$ref": "#/$defs/predicate" },
+        "rows": { "type": "array", "items": { "$ref": "#/$defs/row" } },
+        "strategy": { "type": "string", "enum": ["copy-on-write", "merge-on-read"] },
+        "expect": { "$ref": "#/$defs/expect" }
+      }
+    },
+    "opRewrite": {
+      "type": "object", "required": ["op"], "additionalProperties": false,
+      "description": "Compaction / rewrite_data_files. Physical-only; must be a logical no-op on the row multiset.",
+      "properties": {
+        "op": { "const": "rewrite" },
+        "expect": { "$ref": "#/$defs/expect" }
+      }
+    },
+    "opEvolveSchema": {
+      "type": "object", "required": ["op", "changes"], "additionalProperties": false,
+      "properties": {
+        "op": { "const": "evolve-schema" },
+        "changes": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "type": "object", "required": ["kind", "field"], "additionalProperties": false,
+                "properties": { "kind": { "const": "add-column" }, "field": { "$ref": "#/$defs/field" } } },
+              { "type": "object", "required": ["kind", "field-id", "to"], "additionalProperties": false,
+                "properties": { "kind": { "const": "promote-type" }, "field-id": { "type": "integer" }, "to": { "$ref": "#/$defs/icebergType" } } },
+              { "type": "object", "required": ["kind", "field-id"], "additionalProperties": false,
+                "properties": { "kind": { "const": "drop-column" }, "field-id": { "type": "integer" } } },
+              { "type": "object", "required": ["kind", "field-id", "to"], "additionalProperties": false,
+                "properties": { "kind": { "const": "rename-column" }, "field-id": { "type": "integer" }, "to": { "type": "string" } } },
+              { "type": "object", "required": ["kind", "field-id", "required"], "additionalProperties": false,
+                "properties": { "kind": { "const": "set-required" }, "field-id": { "type": "integer" }, "required": { "type": "boolean" } } }
+            ]
+          }
+        },
+        "expect": { "$ref": "#/$defs/expect" }
+      }
+    },
+    "opEvolveSpec": {
+      "type": "object", "required": ["op", "spec"], "additionalProperties": false,
+      "properties": {
+        "op": { "const": "evolve-spec" },
+        "spec": { "$ref": "#/$defs/partitionSpec" },
+        "expect": { "$ref": "#/$defs/expect" }
+      }
+    },
+    "opObserve": {
+      "type": "object", "required": ["op", "at"], "additionalProperties": false,
+      "description": "Read the table at a snapshot ref. Produces no snapshot. 'bind' names this observation for later invariant references. 'expect' asserts authored values; 'invariant' asserts a metamorphic relation (oracle mode).",
+      "properties": {
+        "op": { "const": "observe" },
+        "at": { "type": ["string", "integer"], "description": "'latest', a bound name, or a commit ordinal" },
+        "bind": { "type": "string", "description": "name this observed state for later invariant references" },
+        "expect": { "$ref": "#/$defs/expect" },
+        "invariant": { "$ref": "#/$defs/invariant" }
+      }
+    },
+
+    "expect": {
+      "description": "Authored-golden expectation. Any subset; the comparator checks only what is declared (subset assertion).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "operation": { "type": "string", "enum": ["append", "replace", "overwrite", "delete"], "description": "spec snapshot operation enum" }
+          }
+        },
+        "delete-file": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "content": { "type": "integer", "enum": [1, 2], "description": "1=positional (incl. DV), 2=equality (spec data_file.content)" },
+            "format": { "type": "string", "enum": ["parquet", "puffin"], "description": "puffin => deletion vector" },
+            "equality-ids": {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "element-type": { "type": "string", "description": "spec pins int; retained to catch iceberg-go#880" },
+                "value": { "type": "array", "items": { "type": "integer" } }
+              }
+            }
+          }
+        },
+        "scan": {
+          "type": "object", "required": ["rows"], "additionalProperties": false,
+          "description": "Expected logical rows at this point. Compared as a multiset; __rowkey optional here (author may key by data).",
+          "properties": { "rows": { "type": "array", "items": { "type": "object" } } }
+        },
+        "physical": {
+          "type": "object",
+          "description": "Spec-pinned physical invariants keyed by spec-field name; value is exact or a comparator like '>= N'.",
+          "additionalProperties": true
+        }
+      }
+    },
+
+    "invariant": {
+      "description": "Metamorphic relation checked without an authored expected value (oracle mode). The named relation must hold; violation = bug.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rowkey-multiset-equals": { "type": "string", "description": "the __rowkey multiset here equals that of the referenced bound observation" },
+        "rowkey-multiset-minus": {
+          "type": "object", "additionalProperties": false, "required": ["from", "matching"],
+          "properties": {
+            "from": { "type": "string", "description": "bound observation" },
+            "matching": { "$ref": "#/$defs/predicate", "description": "rows here == from minus rows matching predicate" }
+          }
+        },
+        "count-equals-summary": { "type": "boolean", "description": "count(scan) == snapshot.summary.total-records" },
+        "physical": { "type": "object", "additionalProperties": true, "description": "e.g. {delete-files-remaining: 0} after rewrite" }
+      }
+    }
+  }
+}

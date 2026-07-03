@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/laskoviymishka/iceberg-verification/spec/expected-output.schema.json",
+  "title": "Iceberg Conformance Expected Output (golden)",
+  "description": "The expected result of running an op-log against an implementation. Reuses the read-side fixture vocabulary from sungwy/iceberg-testing#2 (accept / clause / decoded-rows keyed by field-id / type-annotated value tree) and extends it with a snapshots section for the DML (write) side, since an op-log mutates a table across multiple snapshots and observation points. A read-only spec (single observation, no mutations) collapses to exactly the PR #2 shape.",
+  "type": "object",
+  "required": ["spec-id", "accept", "observations"],
+  "additionalProperties": false,
+  "properties": {
+    "spec-id": { "type": "string" },
+    "accept": {
+      "type": "boolean",
+      "description": "PR #2 semantics: true if a conformant implementation runs the op-log and reads it back; false if the input is meant to be rejected."
+    },
+    "clause": { "type": "string", "description": "PR #2: the spec behavior this case pins" },
+    "reason": { "type": "string", "description": "PR #2: present when accept=false; the spec invariant the input violates" },
+    "note": { "type": "string", "description": "PR #2: what the case pins" },
+
+    "snapshots": {
+      "type": "array",
+      "description": "DML-side extension (absent in a read-only PR #2 case). Commit-ordered snapshots produced by the op-log. Reuses PR #2's manifest/delete-file vocabulary.",
+      "items": {
+        "type": "object",
+        "required": ["ordinal", "operation"],
+        "additionalProperties": false,
+        "properties": {
+          "ordinal": { "type": "integer", "minimum": 0, "description": "commit ordinal (0,1,2...); replaces the implementation's random snapshot-id" },
+          "parent": { "type": ["integer", "null"] },
+          "operation": { "type": "string", "enum": ["append", "replace", "overwrite", "delete"], "description": "spec snapshot operation enum" },
+          "sequence-number": { "type": "integer" },
+          "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Only layout-independent aggregate metrics (per-file metrics vary with file splitting and are excluded).",
+            "properties": {
+              "total-records": { "type": "integer" },
+              "added-records": { "type": "integer" },
+              "deleted-records": { "type": "integer" },
+              "total-delete-files": { "type": "integer" }
+            }
+          },
+          "delete-files": {
+            "type": "array",
+            "description": "Spec-pinned facts about delete files added in this snapshot, in PR #2's manifest vocabulary. No paths/sizes.",
+            "items": {
+              "type": "object",
+              "required": ["content"],
+              "additionalProperties": false,
+              "properties": {
+                "content": { "type": "integer", "enum": [1, 2], "description": "1=positional (incl. deletion vector), 2=equality (data_file.content)" },
+                "format": { "type": "string", "enum": ["parquet", "puffin"], "description": "puffin => deletion vector" },
+                "equality-ids": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Present for content=2. PR #2 shape: element type retained (spec pins int) to catch iceberg-go#880.",
+                  "properties": {
+                    "element-field-id": { "type": "integer" },
+                    "element-type": { "type": "string" },
+                    "value": { "type": "array", "items": { "type": "integer" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "observations": {
+      "type": "array",
+      "description": "One entry per 'observe' in the op-log, in order. Each is a PR #2-style decoded read of the table at that point.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["at", "decoded-rows"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": ["string", "integer"], "description": "the resolved observation point: a bound name, 'latest', or a commit ordinal" },
+          "bind": { "type": "string" },
+          "iceberg-schema": {
+            "type": "array",
+            "description": "PR #2 shape: field-id, name, type per top-level column at this observation (the schema may differ across observations under schema evolution).",
+            "items": {
+              "type": "object",
+              "required": ["field-id", "name", "type"],
+              "additionalProperties": false,
+              "properties": {
+                "field-id": { "type": "integer" },
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          },
+          "decoded-rows": {
+            "type": "array",
+            "description": "PR #2 shape: one entry per row, keyed by field-id, value as a type-annotated tree. Order is NOT significant (a scan is unordered); the orchestrator sorts by the __rowkey column before comparison. A physical/SQL-null row is a bare null.",
+            "items": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "description": "field-id -> value node",
+                  "patternProperties": {
+                    "^[0-9]+$": { "$ref": "#/$defs/valueNode" }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "valueNode": {
+      "description": "PR #2 type-annotated value tree. Primitive: {type,value}. Object: {type:object,fields}. Array: {type:array,elements}. Variant null: {type:null}. 64-bit integers are JSON strings.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "type": "string", "description": "physical/spec type name: int/long/string/decimal/int8..int64/boolean/double/date/uuid/binary/timestamp variants..." },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "fields"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "object" },
+            "fields": { "type": "object", "additionalProperties": { "$ref": "#/$defs/valueNode" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "elements"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "array" },
+            "elements": { "type": "array", "items": { "$ref": "#/$defs/valueNode" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "description": "present variant null",
+          "properties": { "type": { "const": "null" } }
+        }
+      ]
+    }
+  }
+}
