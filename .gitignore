@@ -2,6 +2,9 @@
 /bin/
 *.test
 *.out
+# compiled runner binary (do not commit)
+/runners/go/go
+/runners/go/runner
 # runner scratch warehouses
 /tmp/
 warehouse/
