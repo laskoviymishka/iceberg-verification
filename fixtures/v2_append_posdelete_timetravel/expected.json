@@ -2,12 +2,12 @@
   "spec-id": "v2_append_posdelete_timetravel",
   "accept": true,
   "clause": "table-spec/row-level-deletes",
-  "note": "append 3 rows, merge-on-read positional delete of id=2, then time-travel back to the pre-delete snapshot. One observation per 'observe' entry in the op-log, in order. decoded-rows keyed by field-id (0=__rowkey, 1=id, 2=category); positional delete => delete-file content=1.",
+  "note": "append 3 rows, merge-on-read positional delete of id=2, then time-travel back to the pre-delete snapshot. One observation per 'observe' entry in the op-log, in order. decoded-rows keyed by field-id (0=__rowkey, 1=id, 2=category); positional delete => delete-file content=1. NOTE: on the delete snapshot, total-records stays 3 (the physical data-record count; the delete is a separate file) and deleted-records is not set — this is the merge-on-read summary semantics, confirmed byte-identical across the iceberg-java reference and iceberg-go. An earlier draft of this golden used logical live-row counts (total-records=2, deleted-records=1); the reference settled it.",
   "snapshots": [
     { "ordinal": 0, "parent": null, "operation": "append",
       "summary": { "total-records": 3, "added-records": 3 } },
     { "ordinal": 1, "parent": 0, "operation": "delete",
-      "summary": { "total-records": 2, "deleted-records": 1, "total-delete-files": 1 },
+      "summary": { "total-records": 3, "total-delete-files": 1 },
       "delete-files": [ { "content": 1, "format": "parquet" } ] }
   ],
   "observations": [

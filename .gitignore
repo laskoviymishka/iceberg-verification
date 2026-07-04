@@ -9,6 +9,11 @@
 /runners/rust/target/
 # local cargo registry-proxy config (environment-specific)
 /runners/rust/.cargo/
+# Java build artifacts
+/runners/java/build/
+/runners/java/.gradle/
+# local gradle maven-proxy config (environment-specific)
+/runners/java/gradle.properties
 # runner scratch warehouses
 /tmp/
 warehouse/

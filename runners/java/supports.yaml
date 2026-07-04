@@ -1,0 +1,26 @@
+# What iceberg-java claims to support, verified against 1.11.0.
+# The orchestrator runs the java runner only over specs whose required features
+# are listed here. A listed feature that then fails = a real failure. An
+# UNLISTED feature a spec needs = exit 4 = a visible "unsupported" matrix cell
+# (declared gap). Java is the reference implementation — it supports the full
+# DML surface; this file tracks what the RUNNER has wired so far.
+
+implementation: iceberg-java
+version: 1.11.0
+
+supports:
+  - append
+  - delete.merge-on-read.position       # PositionDeleteWriter + newRowDelta (positions self-computed)
+  - time-travel                         # IcebergGenerics.read(table).useSnapshot(id)
+  - types.primitive                     # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
+
+# NOT YET WIRED IN THE RUNNER (iceberg-java supports these in pure core; runner phases beyond 0-2):
+#   evolve-schema.promote-type          # UpdateSchema.updateColumn (Phase 3)
+#   evolve-schema.add-column (+default) # UpdateSchema.addColumn(name,type,doc,Literal) (Phase 3)
+#   rewrite                             # table.newRewrite() (Phase 5)
+#   delete.copy-on-write                # newDelete().deleteFromRowFilter (whole-file)
+#   delete.merge-on-read.deletion-vector# BaseDVFileWriter / Deletes.writeDVs (v3)
+#   types.decimal / uuid / fixed / nested + partition transforms (Phase 4)
+#
+# Because Java is the reference, its output on the shared fixtures is the ground
+# truth the orchestrator diffs the other implementations against.
