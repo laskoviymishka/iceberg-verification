@@ -1,0 +1,31 @@
+# What iceberg-rust claims to support, verified against HEAD.
+# The orchestrator runs the rust runner only over specs whose required features
+# are listed here. A listed feature that then fails = a real failure. An
+# UNLISTED feature a spec needs = exit 4 = a visible "unsupported" matrix cell
+# (declared gap). Removing a gap comment when support lands is what lights up
+# the cell — drift can't hide (protobuf-conformance failure-list discipline).
+
+implementation: iceberg-rust
+version: HEAD      # replace with the pinned commit sha at PR time
+
+supports:
+  - append
+  - time-travel                          # scan().snapshot_id(id), arbitrary historical
+  - types.primitive                      # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
+
+# DECLARED GAPS (NOT supported by iceberg-rust today -> exit 4 -> empty matrix cell):
+#   delete.copy-on-write                 # no delete/overwrite transaction action
+#   delete.merge-on-read.position        # no position-delete writer; fast_append rejects non-Data files
+#   delete.merge-on-read.equality        # equality-delete writer exists on disk but is not committable
+#   delete.merge-on-read.deletion-vector # absent
+#   overwrite.copy-on-write              # no overwrite action
+#   rewrite                              # no compaction / rewrite_data_files action
+#   evolve-schema.promote-type           # UpdateSchemaAction supports add/delete column only
+#   evolve-spec                          # no partition-spec evolution action
+#
+# NOT YET WIRED IN THE RUNNER (iceberg-rust supports these; runner Phase 4 work, not a spec gap):
+#   types.decimal / types.uuid / types.fixed / types.nested (struct/list/map)
+#   partition transforms (bucket/truncate)
+#
+# READ-ONLY capability iceberg-rust HAS but the op-log can't exercise (can't write
+# the deletes to read back): applying position deletes on scan.

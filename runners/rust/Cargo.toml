@@ -1,0 +1,58 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+[package]
+name = "iceberg-verification-runner"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "iceberg-rust conformance runner for the iceberg-verification corpus (emit-only)."
+
+[[bin]]
+name = "runner"
+path = "src/main.rs"
+
+[dependencies]
+# Path deps to the local iceberg-rust working copy (tracks HEAD).
+iceberg = { path = "../../../iceberg-rust/crates/iceberg" }
+iceberg-catalog-sql = { path = "../../../iceberg-rust/crates/catalog/sql" }
+
+# Must match iceberg-rust's arrow/parquet major (58) so RecordBatch/Schema
+# and WriterProperties share type identity across the crate boundary.
+arrow-array = "58"
+arrow-schema = "58"
+parquet = "58"
+
+# SQLite catalog backend; sqlite feature + tokio runtime required to open a
+# `sqlite:` URI and create the database file before load.
+sqlx = { version = "0.8.1", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "any",
+    "sqlite",
+    "migrate",
+] }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }

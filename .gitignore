@@ -5,6 +5,10 @@
 # compiled runner binary (do not commit)
 /runners/go/go
 /runners/go/runner
+# Rust build artifacts
+/runners/rust/target/
+# local cargo registry-proxy config (environment-specific)
+/runners/rust/.cargo/
 # runner scratch warehouses
 /tmp/
 warehouse/

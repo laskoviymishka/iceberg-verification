@@ -1,0 +1,66 @@
+# Spec — v2 two appends + time-travel, NO delete. Authored-golden.
+#
+# The universal-write fixture: it uses only create + append + scan + time-travel,
+# which every implementation supports. This is the cross-implementation baseline
+# — iceberg-go AND iceberg-rust both run it fully green, so a divergence here is a
+# real interop bug, not a feature gap. (The sibling v2_append_posdelete_timetravel
+# adds a merge-on-read delete, which iceberg-rust cannot write yet -> exit 4.)
+#
+# Pins: snapshot ordinals across two commits (0, 1), the append operation, live
+# row multiset after each append, and a time-travel read of the first snapshot.
+
+header:
+  id: v2_append_timetravel
+  format-version: 2
+  spec-anchor: "table-spec#snapshots"
+  table-uuid: "7b3e1a02-9c4d-4f18-8a2b-6e5f0d1c2b3a"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,       type: long,   required: true }
+      - { id: 2, name: category, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, category: !string "a" }
+      - { __rowkey: r2, id: !long 2, category: !string "b" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    bind: after-first
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 2, category: b }
+
+  - op: append
+    rows:
+      - { __rowkey: r3, id: !long 3, category: !string "a" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    bind: after-second
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 2, category: b }
+          - { id: 3, category: a }
+
+  # time-travel: the first snapshot still reads only the first two rows
+  - op: observe
+    at: after-first
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 2, category: b }

@@ -1,0 +1,53 @@
+{
+  "spec-id": "v2_append_timetravel",
+  "accept": true,
+  "clause": "table-spec/snapshots",
+  "note": "two appends (ordinals 0 and 1), then time-travel to the first snapshot. Universal-write baseline: create + append + scan + time-travel only, so every implementation runs it green (verified byte-identical modulo row order across iceberg-go and iceberg-rust). decoded-rows keyed by field-id (0=__rowkey, 1=id, 2=category); row order is not significant (the orchestrator sorts by __rowkey).",
+  "snapshots": [
+    { "ordinal": 0, "parent": null, "operation": "append",
+      "summary": { "total-records": 2, "added-records": 2 } },
+    { "ordinal": 1, "parent": 0, "operation": "append",
+      "summary": { "total-records": 3, "added-records": 1 } }
+  ],
+  "observations": [
+    {
+      "at": "after-first",
+      "bind": "after-first",
+      "iceberg-schema": [
+        { "field-id": 0, "name": "__rowkey",  "type": "string" },
+        { "field-id": 1, "name": "id",        "type": "long" },
+        { "field-id": 2, "name": "category",  "type": "string" }
+      ],
+      "decoded-rows": [
+        { "0": { "type": "string", "value": "r1" }, "1": { "type": "long", "value": "1" }, "2": { "type": "string", "value": "a" } },
+        { "0": { "type": "string", "value": "r2" }, "1": { "type": "long", "value": "2" }, "2": { "type": "string", "value": "b" } }
+      ]
+    },
+    {
+      "at": "after-second",
+      "bind": "after-second",
+      "iceberg-schema": [
+        { "field-id": 0, "name": "__rowkey",  "type": "string" },
+        { "field-id": 1, "name": "id",        "type": "long" },
+        { "field-id": 2, "name": "category",  "type": "string" }
+      ],
+      "decoded-rows": [
+        { "0": { "type": "string", "value": "r1" }, "1": { "type": "long", "value": "1" }, "2": { "type": "string", "value": "a" } },
+        { "0": { "type": "string", "value": "r2" }, "1": { "type": "long", "value": "2" }, "2": { "type": "string", "value": "b" } },
+        { "0": { "type": "string", "value": "r3" }, "1": { "type": "long", "value": "3" }, "2": { "type": "string", "value": "a" } }
+      ]
+    },
+    {
+      "at": "after-first",
+      "iceberg-schema": [
+        { "field-id": 0, "name": "__rowkey",  "type": "string" },
+        { "field-id": 1, "name": "id",        "type": "long" },
+        { "field-id": 2, "name": "category",  "type": "string" }
+      ],
+      "decoded-rows": [
+        { "0": { "type": "string", "value": "r1" }, "1": { "type": "long", "value": "1" }, "2": { "type": "string", "value": "a" } },
+        { "0": { "type": "string", "value": "r2" }, "1": { "type": "long", "value": "2" }, "2": { "type": "string", "value": "b" } }
+      ]
+    }
+  ]
+}
