@@ -127,6 +127,27 @@ final class TypedValue {
     };
   }
 
+  /**
+   * Convert a primitive TypedValue to an iceberg expressions.Literal of the target
+   * type — used for schema-evolution add-column initial/write defaults.
+   */
+  org.apache.iceberg.expressions.Literal<?> toIcebergLiteral(Type type) {
+    if (isNull() || isNested()) {
+      throw new IllegalArgumentException("cannot build a scalar literal from " + kind);
+    }
+    return switch (type.typeId()) {
+      case BOOLEAN -> org.apache.iceberg.expressions.Literal.of(Boolean.parseBoolean(scalar));
+      case INTEGER -> org.apache.iceberg.expressions.Literal.of(Integer.parseInt(scalar));
+      case LONG -> org.apache.iceberg.expressions.Literal.of(Long.parseLong(scalar));
+      case FLOAT -> org.apache.iceberg.expressions.Literal.of(Float.parseFloat(scalar));
+      case DOUBLE -> org.apache.iceberg.expressions.Literal.of(Double.parseDouble(scalar));
+      case STRING -> org.apache.iceberg.expressions.Literal.of(scalar);
+      case DECIMAL -> org.apache.iceberg.expressions.Literal.of(new BigDecimal(scalar));
+      case UUID -> org.apache.iceberg.expressions.Literal.of(UUID.fromString(scalar));
+      default -> throw new IllegalArgumentException("unsupported default type " + type);
+    };
+  }
+
   private static byte[] hexToBytes(String s) {
     int len = s.length();
     byte[] out = new byte[len / 2];

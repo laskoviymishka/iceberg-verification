@@ -22,14 +22,13 @@ supports:
     - delete.merge-on-read.position       # PositionDeleteWriter + newRowDelta (positions self-computed)
     - time-travel
     - types.primitive                     # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
+    - evolve-schema                       # updateColumn promote + addColumn(name,type,doc,Literal) defaults
+    - rewrite                             # table.newRewrite() consolidation (pure core)
 
-# NOT YET WIRED IN THE RUNNER (iceberg-java supports these in pure core; runner phases beyond 0-2):
-#   write.evolve-schema.promote-type      # UpdateSchema.updateColumn (Phase 3)
-#   write.evolve-schema.add-column (+default)
-#   write.rewrite                         # table.newRewrite() (Phase 5)
+# NOT YET WIRED IN THE RUNNER (iceberg-java supports these in pure core; runner TODO):
 #   write.delete.copy-on-write            # newDelete().deleteFromRowFilter (whole-file)
 #   write.delete.merge-on-read.deletion-vector  # BaseDVFileWriter (v3); the 1.11 pin lacks nextRowId etc.
-#   types.decimal / uuid / fixed / nested + partition transforms (Phase 4)
+#   types.decimal / uuid / fixed / nested + partition transforms (nested build/decode)
 #
 # Because Java is the reference, its output on the shared fixtures is the ground
 # truth the orchestrator diffs the other implementations against.

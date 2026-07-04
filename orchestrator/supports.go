@@ -92,10 +92,14 @@ func fixtureFeatures(data []byte) (source string, fmtVer *int, ops []Op, require
 		reqSet["read.artifact"] = true
 	}
 
+	fv := 2
+	if fmtVer != nil {
+		fv = *fmtVer
+	}
 	for _, e := range root.Entries {
 		op := Op{Op: e.Op, At: e.At, Bind: e.Bind, Strategy: e.Strategy, Kind: e.Kind}
 		ops = append(ops, op)
-		recordRequired(e.Op, e.Strategy, e.Kind, reqSet)
+		recordRequired(e.Op, e.Strategy, e.Kind, fv, reqSet)
 	}
 
 	for k := range reqSet {
@@ -105,9 +109,9 @@ func fixtureFeatures(data []byte) (source string, fmtVer *int, ops []Op, require
 	return source, fmtVer, ops, required, nil
 }
 
-// recordRequired maps an op (and a delete's strategy/kind) to the write feature
-// key it exercises, for the supports.yaml cross-check.
-func recordRequired(op, strategy, kind string, req map[string]bool) {
+// recordRequired maps an op (and a delete's strategy/kind, at a format version)
+// to the write feature key it exercises, for the supports.yaml cross-check.
+func recordRequired(op, strategy, kind string, formatVersion int, req map[string]bool) {
 	switch op {
 	case "append":
 		req["write.append"] = true
@@ -122,12 +126,18 @@ func recordRequired(op, strategy, kind string, req map[string]bool) {
 	case "delete":
 		if strategy == "copy-on-write" {
 			req["write.delete.copy-on-write"] = true
-		} else {
-			k := kind
-			if k == "" {
-				k = "position"
-			}
-			req["write.delete.merge-on-read."+k] = true
+			break
 		}
+		k := kind
+		if k == "" {
+			k = "position"
+		}
+		// In format-version 3, a position delete MUST be a deletion vector
+		// (Puffin), not a parquet position-delete file — so the capability a
+		// v3 position delete actually exercises is the DV writer.
+		if formatVersion >= 3 && k == "position" {
+			k = "deletion-vector"
+		}
+		req["write.delete.merge-on-read."+k] = true
 	}
 }

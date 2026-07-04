@@ -27,9 +27,11 @@ name = "runner"
 path = "src/main.rs"
 
 [dependencies]
-# Path deps to the local iceberg-rust working copy (tracks HEAD).
-iceberg = { path = "../../../iceberg-rust/crates/iceberg" }
-iceberg-catalog-sql = { path = "../../../iceberg-rust/crates/catalog/sql" }
+# Pinned to an apache/iceberg-rust main commit (resolvable in CI, where no
+# sibling working copy exists). The runner only touches long-stable core APIs
+# (StaticTable read, SqlCatalog, fast_append), so this rev is safe to bump.
+iceberg = { git = "https://github.com/apache/iceberg-rust", rev = "28cf83d6cf55909c52de90809aff107aa010e7af" }
+iceberg-catalog-sql = { git = "https://github.com/apache/iceberg-rust", rev = "28cf83d6cf55909c52de90809aff107aa010e7af" }
 
 # Must match iceberg-rust's arrow/parquet major (58) so RecordBatch/Schema
 # and WriterProperties share type identity across the crate boundary.

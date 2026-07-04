@@ -77,6 +77,7 @@ final class Interpret {
   private Table table;
   private Schema schema;
   private Map<String, Integer> canonIds;
+  private Map<Integer, String> authoredIdToName; // fixture field-id -> column name
 
   // iceberg snapshot id -> commit ordinal (0,1,2...)
   private final Map<Long, Integer> snapshotOrdinal = new HashMap<>();
@@ -101,6 +102,13 @@ final class Interpret {
     } else {
       this.schema = SchemaBuilder.build(header(log));
       this.canonIds = SchemaBuilder.canonicalIds(header(log));
+      // authored field-id -> column name, so evolve-schema (which references the
+      // fixture's field-ids) resolves to columns by the name they were authored
+      // with — names survive iceberg's create-time id reassignment; ids don't.
+      this.authoredIdToName = new HashMap<>();
+      for (Map.Entry<String, Integer> e : canonIds.entrySet()) {
+        this.authoredIdToName.put(e.getValue(), e.getKey());
+      }
       createTable(log);
     }
 
@@ -157,9 +165,8 @@ final class Interpret {
       case "append" -> doAppend(idx, entry);
       case "observe" -> doObserve(idx, entry);
       case "delete" -> doDelete(idx, entry);
-      // Phases beyond 0-2 are wired later; until then they're declared gaps.
-      case "evolve-schema" -> throw new UnsupportedFeature(idx, "evolve-schema.promote-type");
-      case "rewrite" -> throw new UnsupportedFeature(idx, "rewrite");
+      case "evolve-schema" -> doEvolveSchema(idx, entry);
+      case "rewrite" -> doRewrite(idx, entry);
       case "evolve-spec" -> throw new UnsupportedFeature(idx, "evolve-spec");
       case "overwrite" -> throw new UnsupportedFeature(idx, "op.overwrite");
       default -> throw new UnsupportedFeature(idx, "op." + op);
@@ -181,6 +188,16 @@ final class Interpret {
   @SuppressWarnings("unchecked")
   private DataFile writeRows(List<Object> rows, String prefix) throws IOException {
     Schema tableSchema = table.schema();
+    List<Record> records = new java.util.ArrayList<>(rows.size());
+    for (Object rowObj : rows) {
+      records.add(toRecord(tableSchema, (Map<String, Object>) rowObj));
+    }
+    return writeRecords(records, prefix);
+  }
+
+  /** Serialize a list of GenericRecords into one committed-shape DataFile. */
+  private DataFile writeRecords(List<Record> records, String prefix) throws IOException {
+    Schema tableSchema = table.schema();
     GenericAppenderFactory appenders = new GenericAppenderFactory(tableSchema);
     String filename = FileFormat.PARQUET.addExtension(prefix + "-" + System.nanoTime());
     OutputFile outputFile = table.io().newOutputFile(table.locationProvider().newDataLocation(filename));
@@ -188,8 +205,8 @@ final class Interpret {
         appenders.newDataWriter(
             EncryptionUtil.plainAsEncryptedOutput(outputFile), FileFormat.PARQUET, null);
     try (writer) {
-      for (Object rowObj : rows) {
-        writer.write(toRecord(tableSchema, (Map<String, Object>) rowObj));
+      for (Record r : records) {
+        writer.write(r);
       }
     }
     return writer.toDataFile();
@@ -206,13 +223,25 @@ final class Interpret {
       }
       Object raw = row.get(name);
       if (raw == null) {
-        record.setField(name, null);
+        // Column omitted by this row: the writer substitutes the field's
+        // write-default (v3). Absent that, null.
+        record.setField(name, field.writeDefault());
         continue;
       }
       TypedValue tv = asTyped(raw, name);
       record.setField(name, tv.isNull() ? null : tv.toJavaValue(field.type()));
     }
     return record;
+  }
+
+  /** Resolve a fixture-authored field-id to its column name (names survive id reassignment). */
+  private String authoredName(Object fieldId) {
+    int id = ((Number) fieldId).intValue();
+    String name = authoredIdToName == null ? null : authoredIdToName.get(id);
+    if (name == null) {
+      throw new IllegalArgumentException("no column for authored field-id " + id);
+    }
+    return name;
   }
 
   private static TypedValue asTyped(Object raw, String name) {
@@ -244,14 +273,92 @@ final class Interpret {
     recordSnapshot();
   }
 
+  /**
+   * Schema evolution: apply each change (promote-type via updateColumn,
+   * add-column with initial+write default via addColumn(name,type,doc,Literal)).
+   * The l-log gives field-ids; we resolve them to names against the current
+   * schema. After commit, canonIds is rebuilt so the new column is labeled.
+   */
+  @SuppressWarnings("unchecked")
+  private void doEvolveSchema(int idx, Map<String, Object> entry) {
+    List<Object> changes = (List<Object>) entry.get("changes");
+    if (changes == null) {
+      throw new IllegalArgumentException("entry " + idx + ": evolve-schema missing changes");
+    }
+    org.apache.iceberg.UpdateSchema update = table.updateSchema();
+    for (Object cObj : changes) {
+      Map<String, Object> c = (Map<String, Object>) cObj;
+      String kind = str(c.get("kind"));
+      switch (kind) {
+        case "promote-type" -> {
+          String name = authoredName(c.get("field-id"));
+          org.apache.iceberg.types.Type to = SchemaBuilder.resolveType(c.get("to"));
+          update.updateColumn(name, (org.apache.iceberg.types.Type.PrimitiveType) to);
+        }
+        case "add-column" -> {
+          Map<String, Object> field = (Map<String, Object>) c.get("field");
+          String name = str(field.get("name"));
+          org.apache.iceberg.types.Type type = SchemaBuilder.resolveType(field.get("type"));
+          Object dv = field.get("initial-default");
+          if (dv == null) {
+            dv = field.get("write-default");
+          }
+          if (dv != null) {
+            // addColumn(name, type, doc, default) sets BOTH initial + write default.
+            update.addColumn(name, type, null, asTyped(dv, name).toIcebergLiteral(type));
+          } else {
+            update.addColumn(name, type);
+          }
+        }
+        case "drop-column" -> update.deleteColumn(authoredName(c.get("field-id")));
+        case "rename-column" -> update.renameColumn(authoredName(c.get("field-id")), str(c.get("to")));
+        default -> throw new UnsupportedFeature(idx, "evolve-schema." + kind);
+      }
+    }
+    update.commit();
+    table.refresh();
+    // schema changed → relabel canonical ids by position against the new schema.
+    this.canonIds = SchemaBuilder.canonicalIdsFromSchema(table.schema());
+  }
+
+  /**
+   * Compaction / rewrite_data_files, pure core (no Spark): read every live row,
+   * write it into one consolidated data file, and atomically swap the old data
+   * files for the new one via RewriteFiles. A logical no-op on the row multiset.
+   */
+  private void doRewrite(int idx, Map<String, Object> entry) throws IOException {
+    java.util.Set<DataFile> toDelete = new java.util.HashSet<>();
+    try (CloseableIterable<org.apache.iceberg.FileScanTask> tasks = table.newScan().planFiles()) {
+      for (org.apache.iceberg.FileScanTask t : tasks) {
+        toDelete.add(t.file());
+      }
+    }
+    if (toDelete.size() <= 1) {
+      // nothing to consolidate; still a valid (empty) rewrite — emit a snapshot only if it changes state.
+      return;
+    }
+    // read all live rows (deletes applied) and re-materialize into one file.
+    java.util.List<Record> rows = new java.util.ArrayList<>();
+    try (CloseableIterable<Record> it = IcebergGenerics.read(table).build()) {
+      for (Record r : it) {
+        rows.add(r);
+      }
+    }
+    DataFile combined = writeRecords(rows, "compact-" + idx);
+    table.newRewrite().rewriteFiles(toDelete, java.util.Set.of(combined)).commit();
+    table.refresh();
+    recordSnapshot();
+  }
+
   private void doObserve(int idx, Map<String, Object> entry) throws IOException {
     Object atRaw = entry.get("at");
     String bind = str(entry.get("bind"));
 
     IcebergGenerics.ScanBuilder scan = IcebergGenerics.read(table);
     Object atValue;
+    Long snapId = null; // null => latest
     if (atRaw instanceof Number ordinal) {
-      long snapId = snapshotForOrdinal(ordinal.intValue());
+      snapId = snapshotForOrdinal(ordinal.intValue());
       scan = scan.useSnapshot(snapId);
       atValue = ordinal.intValue();
     } else {
@@ -259,7 +366,7 @@ final class Interpret {
       if (at.equals("latest")) {
         atValue = "latest";
       } else {
-        Long snapId = binds.get(at);
+        snapId = binds.get(at);
         if (snapId == null) {
           throw new IllegalStateException("entry " + idx + ": unknown bind \"" + at + "\"");
         }
@@ -272,14 +379,18 @@ final class Interpret {
       atValue = bind;
     }
 
+    // Read at the schema AS OF the observed snapshot — under schema evolution a
+    // time-travel read must use the historical schema, not the current one.
+    Schema readSchema = schemaAt(snapId);
+
     Emit.Observation obs = new Emit.Observation();
     obs.at = atValue;
     obs.bind = bind;
-    obs.icebergSchema = Decode.schemaFields(table.schema(), canonIds);
+    obs.icebergSchema = Decode.schemaFields(readSchema, canonIds);
 
     try (CloseableIterable<Record> records = scan.build()) {
       for (Record record : records) {
-        obs.decodedRows.add(Decode.row(table.schema(), record, canonIds));
+        obs.decodedRows.add(Decode.row(readSchema, record, canonIds));
       }
     }
     out.observations.add(obs);
@@ -287,6 +398,23 @@ final class Interpret {
     if (bind != null && table.currentSnapshot() != null) {
       binds.put(bind, table.currentSnapshot().snapshotId());
     }
+  }
+
+  /** The schema as of a snapshot id (current schema when snapId is null). */
+  private Schema schemaAt(Long snapId) {
+    if (snapId == null) {
+      return table.schema();
+    }
+    org.apache.iceberg.TableMetadata meta =
+        ((org.apache.iceberg.HasTableOperations) table).operations().current();
+    Snapshot snap = table.snapshot(snapId);
+    if (snap != null && snap.schemaId() != null) {
+      Schema s = meta.schemasById().get(snap.schemaId());
+      if (s != null) {
+        return s;
+      }
+    }
+    return table.schema();
   }
 
   private long snapshotForOrdinal(int ordinal) {

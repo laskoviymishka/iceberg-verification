@@ -1412,6 +1412,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.9.0"
+source = "git+https://github.com/apache/iceberg-rust?rev=28cf83d6cf55909c52de90809aff107aa010e7af#28cf83d6cf55909c52de90809aff107aa010e7af"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1467,6 +1468,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-sql"
 version = "0.9.0"
+source = "git+https://github.com/apache/iceberg-rust?rev=28cf83d6cf55909c52de90809aff107aa010e7af#28cf83d6cf55909c52de90809aff107aa010e7af"
 dependencies = [
  "async-trait",
  "iceberg",

@@ -1,6 +1,6 @@
 {
   "schema": "iceberg-verification/report/v1",
-  "generated_at": "2026-07-04T17:04:32Z",
+  "generated_at": "2026-07-04T17:26:17Z",
   "runners": [
     {
       "name": "go",
@@ -50,7 +50,9 @@
           "append",
           "delete.merge-on-read.position",
           "time-travel",
-          "types.primitive"
+          "types.primitive",
+          "evolve-schema",
+          "rewrite"
         ]
       }
     }
@@ -620,41 +622,6 @@
       "yaml": "# Read-conformance fixture — load a checked-in v2 table and observe it.\n#\n# source: artifact means the runner does NOT build the table from an op-log; it\n# materializes the checked-in bytes/ (restoring them to the pinned root named in\n# bytes/ROOT) and loads the table read-only, then runs the observe entries. This\n# is the read side of the same contract: the observe -\u003e decode -\u003e canonical-emit\n# half is identical to the write (synthesized) fixtures.\n#\n# The bytes/ tree was minted by running fixtures/v2_append_timetravel through the\n# DML runner into the pinned root — so this fixture and its write sibling share a\n# golden's row-state, demonstrating that write-conformance mints read-conformance.\n\nheader:\n  id: v2_read_append_timetravel\n  format-version: 2\n  spec-anchor: \"table-spec#snapshots\"\n  source: artifact\n  artifact:\n    path: .        # bytes/ lives alongside this fixture.yaml\n\nentries:\n  # read the current table state (the two appends of the sibling write fixture)\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, category: a }\n          - { id: 2, category: b }\n          - { id: 3, category: a }\n"
     },
     {
-      "id": "v3_compaction_noop",
-      "source": "synthesized",
-      "format_version": 3,
-      "ops": [
-        {
-          "op": "append"
-        },
-        {
-          "op": "delete",
-          "strategy": "merge-on-read",
-          "kind": "position"
-        },
-        {
-          "op": "observe",
-          "at": "latest",
-          "bind": "before-compaction"
-        },
-        {
-          "op": "rewrite"
-        },
-        {
-          "op": "observe",
-          "at": "latest"
-        }
-      ],
-      "required": [
-        "write.append",
-        "write.delete.merge-on-read.position",
-        "write.rewrite"
-      ],
-      "has_golden": false,
-      "golden": null,
-      "yaml": "# Spec 2 — ORACLE MODE. No authored golden. Correctness = a metamorphic relation\n# that needs no source of truth: compaction must be a logical no-op on the live\n# row multiset, and must materialize away the pending delete files.\n#\n# This is the headline \"we catch compaction bugs with no reference engine\" demo.\n# Green on iceberg-go: MoR position delete + ReplaceDataFiles (rewrite).\n\nheader:\n  id: v3_compaction_noop\n  format-version: 3\n  spec-anchor: \"table-spec#compaction\"\n  table-uuid: \"1f2e3d4c-5b6a-7980-1234-567890abcdef\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: long, required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !long 1, val: !string \"x\" }\n      - { __rowkey: r2, id: !long 2, val: !string \"y\" }\n      - { __rowkey: r3, id: !long 3, val: !string \"z\" }\n\n  - op: delete\n    strategy: merge-on-read\n    kind: position\n    predicate: { type: eq, term: id, value: !long 2 }\n\n  # capture the logical state right before compaction\n  - op: observe\n    at: latest\n    bind: before-compaction\n\n  - op: rewrite          # compaction / rewrite_data_files\n\n  - op: observe\n    at: latest\n    invariant:\n      # the live-row multiset must be byte-for-byte the SAME set of rowkeys as\n      # before compaction — compaction changed physical layout only.\n      rowkey-multiset-equals: before-compaction\n      # and the position-delete must have been applied and folded away.\n      physical:\n        delete-files-remaining: 0\n      # cheap secondary oracle, no reference needed:\n      count-equals-summary: true\n"
-    },
-    {
       "id": "v3_schema_evolution_defaults",
       "source": "synthesized",
       "format_version": 3,
@@ -899,247 +866,6 @@
         "spec-id": "v3_schema_evolution_defaults"
       },
       "yaml": "# Spec 3 — v3 schema evolution + default values + time-travel across the change.\n# Authored-golden. Green on iceberg-go: UpdateSchema (promote-type, add-column\n# with initial-default/write-default).\n#\n# Row lineage (_row_id / next-row-id) is expressed logically (__rowkey -\u003e row-id)\n# rather than by raw reserved field-id; VERIFY the exact reserved ids against the\n# current v3 spec before blessing the golden.\n\nheader:\n  id: v3_schema_evolution_defaults\n  format-version: 3\n  spec-anchor: \"table-spec#schema-evolution\"\n  table-uuid: \"aa11bb22-cc33-dd44-ee55-ff6677889900\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,   type: int, required: true }\n      - { id: 2, name: name, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !int 1, name: !string \"ann\" }\n      - { __rowkey: r2, id: !int 2, name: !string \"bob\" }\n\n  - op: observe\n    at: latest\n    bind: v1\n\n  - op: evolve-schema\n    changes:\n      - kind: promote-type\n        field-id: 1\n        to: long\n      - kind: add-column\n        field:\n          id: 3\n          name: score\n          type: long\n          initial-default: !long 0     # existing rows read as 0\n          write-default: !long 0       # new rows omitting score get 0\n\n  - op: append\n    rows:\n      - { __rowkey: r3, id: !long 3, name: !string \"cid\" }   # score omitted -\u003e write-default\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, name: ann, score: 0 }   # initial-default backfills existing rows\n          - { id: 2, name: bob, score: 0 }\n          - { id: 3, name: cid, score: 0 }   # write-default fills the omitted column\n      physical:\n        metadata.next-row-id: \"\u003e= 3\"\n        row-lineage: { r1: 0, r2: 1, r3: 2 }\n\n  # pre-evolution snapshot reads the old schema and rows only\n  - op: observe\n    at: v1\n    expect:\n      scan:\n        rows:\n          - { id: 1, name: ann }\n          - { id: 2, name: bob }\n"
-    },
-    {
-      "id": "v3_types_transforms",
-      "source": "synthesized",
-      "format_version": 3,
-      "ops": [
-        {
-          "op": "append"
-        },
-        {
-          "op": "observe",
-          "at": "latest"
-        }
-      ],
-      "required": [
-        "write.append"
-      ],
-      "has_golden": true,
-      "golden": {
-        "accept": true,
-        "clause": "table-spec/schemas-and-data-types",
-        "note": "single append of two rows over a wide type surface, one observation. decoded-rows keyed by field-id; c_long above int32 range is a long (JSON string); nested struct/list/map are type-annotated trees; SQL-null is {type,value:null}. Partition transforms bucket[4](c_int) + truncate[2](c_str) produce two distinct partition tuples.",
-        "observations": [
-          {
-            "at": "latest",
-            "decoded-rows": [
-              {
-                "0": {
-                  "type": "string",
-                  "value": "r1"
-                },
-                "1": {
-                  "type": "int",
-                  "value": 1
-                },
-                "10": {
-                  "elements": [
-                    {
-                      "type": "string",
-                      "value": "p"
-                    },
-                    {
-                      "type": "string",
-                      "value": "q"
-                    }
-                  ],
-                  "type": "array"
-                },
-                "11": {
-                  "fields": {
-                    "k1": {
-                      "type": "long",
-                      "value": "1"
-                    },
-                    "k2": {
-                      "type": "long",
-                      "value": "2"
-                    }
-                  },
-                  "type": "object"
-                },
-                "2": {
-                  "type": "long",
-                  "value": "10000000000"
-                },
-                "3": {
-                  "type": "decimal",
-                  "value": "12.34"
-                },
-                "4": {
-                  "type": "timestamp",
-                  "value": "2026-01-01T12:00:00"
-                },
-                "5": {
-                  "type": "uuid",
-                  "value": "12345678-1234-1234-1234-123456789abc"
-                },
-                "6": {
-                  "type": "fixed",
-                  "value": "DEADBEEF"
-                },
-                "7": {
-                  "type": "binary",
-                  "value": "0102"
-                },
-                "8": {
-                  "type": "string",
-                  "value": "alpha"
-                },
-                "9": {
-                  "fields": {
-                    "a": {
-                      "type": "int",
-                      "value": 7
-                    },
-                    "b": {
-                      "type": "string",
-                      "value": "nested"
-                    }
-                  },
-                  "type": "object"
-                }
-              },
-              {
-                "0": {
-                  "type": "string",
-                  "value": "r2"
-                },
-                "1": {
-                  "type": "int",
-                  "value": 2
-                },
-                "10": {
-                  "elements": [],
-                  "type": "array"
-                },
-                "11": {
-                  "fields": {},
-                  "type": "object"
-                },
-                "2": {
-                  "type": "long",
-                  "value": null
-                },
-                "3": {
-                  "type": "decimal",
-                  "value": "0.01"
-                },
-                "4": {
-                  "type": "timestamp",
-                  "value": "2026-06-30T23:59:59"
-                },
-                "5": {
-                  "type": "uuid",
-                  "value": "abcdefab-cdef-abcd-efab-cdefabcdefab"
-                },
-                "6": {
-                  "type": "fixed",
-                  "value": "00000000"
-                },
-                "7": {
-                  "type": "binary",
-                  "value": "FF"
-                },
-                "8": {
-                  "type": "string",
-                  "value": "alfredo"
-                },
-                "9": {
-                  "fields": {
-                    "a": {
-                      "type": "int",
-                      "value": null
-                    },
-                    "b": {
-                      "type": "string",
-                      "value": ""
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            ],
-            "iceberg-schema": [
-              {
-                "field-id": 0,
-                "name": "__rowkey",
-                "type": "string"
-              },
-              {
-                "field-id": 1,
-                "name": "c_int",
-                "type": "int"
-              },
-              {
-                "field-id": 2,
-                "name": "c_long",
-                "type": "long"
-              },
-              {
-                "field-id": 3,
-                "name": "c_dec",
-                "type": "decimal(9,2)"
-              },
-              {
-                "field-id": 4,
-                "name": "c_ts",
-                "type": "timestamp"
-              },
-              {
-                "field-id": 5,
-                "name": "c_uuid",
-                "type": "uuid"
-              },
-              {
-                "field-id": 6,
-                "name": "c_fixed",
-                "type": "fixed[4]"
-              },
-              {
-                "field-id": 7,
-                "name": "c_bin",
-                "type": "binary"
-              },
-              {
-                "field-id": 8,
-                "name": "c_str",
-                "type": "string"
-              },
-              {
-                "field-id": 9,
-                "name": "c_struct",
-                "type": "struct"
-              },
-              {
-                "field-id": 10,
-                "name": "c_list",
-                "type": "list"
-              },
-              {
-                "field-id": 11,
-                "name": "c_map",
-                "type": "map"
-              }
-            ]
-          }
-        ],
-        "snapshots": [
-          {
-            "operation": "append",
-            "ordinal": 0,
-            "parent": null,
-            "summary": {
-              "added-records": 2,
-              "total-records": 2
-            }
-          }
-        ],
-        "spec-id": "v3_types_transforms"
-      },
-      "yaml": "# Spec 4 — type + transform breadth. Single append, canonical scan. The biggest\n# raw-coverage-per-line win: \"does the writer serialize every type identically,\n# and place rows in the right partitions\". Authored-golden.\n#\n# Covers primitives incl. int-vs-long distinction, decimal, timestamp, uuid,\n# fixed, binary, nested struct + list + map, and a bucket + a truncate transform.\n# Variant is INTENTIONALLY OMITTED from the write side here — iceberg-go writes\n# variant via arrow-go but variant WRITE support should be confirmed before\n# pinning; the read side is already covered by PR #2. If variant-write is a gap,\n# it becomes a supports.yaml omission, not a failure.\n\nheader:\n  id: v3_types_transforms\n  format-version: 3\n  spec-anchor: \"table-spec#schemas-and-data-types\"\n  table-uuid: \"cafef00d-1234-5678-9abc-def012345678\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1,  name: c_int,     type: int, required: true }\n      - { id: 2,  name: c_long,    type: long }\n      - { id: 3,  name: c_dec,     type: \"decimal(9,2)\" }\n      - { id: 4,  name: c_ts,      type: timestamp }\n      - { id: 5,  name: c_uuid,    type: uuid }\n      - { id: 6,  name: c_fixed,   type: \"fixed[4]\" }\n      - { id: 7,  name: c_bin,     type: binary }\n      - { id: 8,  name: c_str,     type: string }\n      - id: 9\n        name: c_struct\n        type:\n          type: struct\n          fields:\n            - { id: 20, name: a, type: int }\n            - { id: 21, name: b, type: string }\n      - id: 10\n        name: c_list\n        type: { type: list, element-id: 30, element: string }\n      - id: 11\n        name: c_map\n        type: { type: map, key-id: 40, key: string, value-id: 41, value: long }\n  partition-spec:\n    fields:\n      - { source-id: 1, field-id: 1000, transform: \"bucket[4]\",   name: c_int_bucket }\n      - { source-id: 8, field-id: 1001, transform: \"truncate[2]\", name: c_str_trunc }\n\nentries:\n  - op: append\n    rows:\n      - __rowkey: r1\n        c_int:    !int 1\n        c_long:   !long 10000000000            # \u003e int32 range: pins long, not int\n        c_dec:    !decimal \"12.34\"\n        c_ts:     !timestamp \"2026-01-01T12:00:00\"\n        c_uuid:   !uuid \"12345678-1234-1234-1234-123456789abc\"\n        c_fixed:  !fixed \"DEADBEEF\"             # hex, 4 bytes\n        c_bin:    !binary \"0102\"\n        c_str:    !string \"alpha\"\n        c_struct: !struct { a: !int 7, b: !string \"nested\" }\n        c_list:   !list [ !string \"p\", !string \"q\" ]\n        c_map:    !map { \"k1\": !long 1, \"k2\": !long 2 }\n      - __rowkey: r2\n        c_int:    !int 2\n        c_long:   !null null\n        c_dec:    !decimal \"0.01\"\n        c_ts:     !timestamp \"2026-06-30T23:59:59\"\n        c_uuid:   !uuid \"abcdefab-cdef-abcd-efab-cdefabcdefab\"\n        c_fixed:  !fixed \"00000000\"\n        c_bin:    !binary \"FF\"\n        c_str:    !string \"alfredo\"             # same truncate[2] prefix \"al\" as r1\n        c_struct: !struct { a: !null null, b: !string \"\" }\n        c_list:   !list []\n        c_map:    !map {}\n    expect:\n      snapshot: { operation: append }\n\n  # rule: mutations assert snapshot facts; observes assert row-state.\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - __rowkey: r1\n            c_int: 1\n            c_long: 10000000000\n            c_dec: \"12.34\"\n            c_str: alpha\n            c_struct: { a: 7, b: nested }\n            c_list: [ p, q ]\n            c_map: { k1: 1, k2: 2 }\n          - __rowkey: r2\n            c_int: 2\n            c_long: null\n            c_dec: \"0.01\"\n            c_str: alfredo\n            c_struct: { a: null, b: \"\" }\n            c_list: []\n            c_map: {}\n      physical:\n        # both rows share truncate[2] \"al\" but differ on bucket[4](c_int);\n        # pins that two distinct partition tuples exist and are layout-independent.\n        partitions-distinct: \"\u003e= 1\"\n"
     }
   ],
   "cells": [
@@ -1203,40 +929,6 @@
       "detail": {}
     },
     {
-      "fixture": "v3_compaction_noop",
-      "runner": "go",
-      "status": "declared-gap",
-      "detail": {
-        "missing": [
-          "write.rewrite"
-        ],
-        "stderr": "unsupported: entry 3: unsupported feature \"op.rewrite\""
-      }
-    },
-    {
-      "fixture": "v3_compaction_noop",
-      "runner": "rust",
-      "status": "declared-gap",
-      "detail": {
-        "missing": [
-          "write.delete.merge-on-read.position",
-          "write.rewrite"
-        ],
-        "stderr": "unsupported: entry 1: delete.merge-on-read.position"
-      }
-    },
-    {
-      "fixture": "v3_compaction_noop",
-      "runner": "java",
-      "status": "declared-gap",
-      "detail": {
-        "missing": [
-          "write.rewrite"
-        ],
-        "stderr": "unsupported: entry 1: unsupported feature \"delete.merge-on-read.deletion-vector\""
-      }
-    },
-    {
       "fixture": "v3_schema_evolution_defaults",
       "runner": "go",
       "status": "declared-gap",
@@ -1261,40 +953,8 @@
     {
       "fixture": "v3_schema_evolution_defaults",
       "runner": "java",
-      "status": "declared-gap",
-      "detail": {
-        "missing": [
-          "write.evolve-schema"
-        ],
-        "stderr": "unsupported: entry 2: unsupported feature \"evolve-schema.promote-type\""
-      }
-    },
-    {
-      "fixture": "v3_types_transforms",
-      "runner": "go",
-      "status": "error",
-      "detail": {
-        "exit": 2,
-        "stderr": "panic: len(v) != b.dtype.ByteWidth\n\ngoroutine 1 [running]:\ngithub.com/apache/arrow-go/v18/arrow/array.(*FixedSizeBinaryBuilder).Append(0x140000be000?, {0x1400088fe38?, 0x8?, 0x1400088f4d0?})\n\t/Users/andrei.tserakhau/go/pkg/mod/github.com/apache/arrow-go/v18@v18.6.1-0.20260623163317-4a540f514484/arrow/array/fixedsize_binarybuilder.go:72 +0xe4\ngithub.com/apache/arrow-go/v18/arrow/array.(*FixedSizeBinaryBuilder).AppendValueFromString(0x14000b34c80, {0x14000d15fd0?, 0x1400088f4d0?})\n\t/Users/andrei.tserakhau/go/pkg/mod/github.com/apache/arrow-go/v18@v18.6.1-0.20260623163317-4a540f514484/arrow/array/fixedsize_binarybuilder.go:192 +0xac\nmain.buildArrowTable(0x1400054d110, {0x1400061db60, 0x2, 0x0?})\n\t/Users/andrei.tserakhau/iceberg-verification/runners/go/arrow_build.go:66 +0x3e4\nmain.(*runner).doAppend(_, _, {{0x14000d15e02, 0x6}, {0x1400061db60, 0x2, 0x2}, 0x0, {0x0, 0x0}, ...})\n\t/Users/andrei.tserakhau/iceberg-verification/runners/go/interpret.go:164 +0x6c\nmain.(*runner).applyEntry(_, _, {{0x14000d15e02, 0x6}, {0x1400061db60, 0x2, 0x2}, 0x0, {0x0, 0x0}, ...})\n\t/Users/andrei.tserakhau/iceberg-verification/runners/go/interpret.go:152 +0x78\nmain.(*runner).execute(0x14000e6de68, 0x14000a5b830)\n\t/Users/andrei.tserakhau/iceberg-verification/runners/go/interpret.go:91 +0x42c\nmain.run()\n\t/Users/andrei.tserakhau/iceberg-verification/runners/go/main.go:102 +0x358\nmain.main()\n\t/Users/andrei.tserakhau/iceberg-verification/runners/go/main.go:66 +0x1c"
-      }
-    },
-    {
-      "fixture": "v3_types_transforms",
-      "runner": "rust",
-      "status": "error",
-      "detail": {
-        "exit": 1,
-        "stderr": "execution error: entry 0 append: column c_dec: arrow type Decimal128(9, 2) not supported before Phase 4"
-      }
-    },
-    {
-      "fixture": "v3_types_transforms",
-      "runner": "java",
-      "status": "error",
-      "detail": {
-        "exit": 1,
-        "stderr": "execution error: java.lang.IllegalArgumentException: nested value has no scalar form"
-      }
+      "status": "pass",
+      "detail": {}
     }
   ]
 }
