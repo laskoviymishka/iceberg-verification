@@ -1,0 +1,63 @@
+# Spec — int -> long promotion crossed by TIME-TRAVEL. Pins the schema-at-snapshot
+# rule: a read at a pre-promotion snapshot must use the historical `int` schema,
+# while a read at the latest snapshot uses `long`. Same column, same rows; only
+# the schema the read resolves against differs by snapshot.
+#
+#   1. append two rows while the column is `int`; bind that snapshot as `pre`,
+#   2. promote int -> long,
+#   3. observe latest  -> column types `long`, values decode as long,
+#   4. observe at `pre` -> column types `int`,  values decode as int.
+#
+# An impl that applies the CURRENT schema to a historical read (typing the old
+# snapshot `long`) fails the `pre` observation. Complements the isolated
+# promotion fixture by pinning the time-travel-across-evolution behavior.
+#
+# Authored-golden, minted from iceberg-java (the reference).
+
+header:
+  id: v3_promote_int_to_long_timetravel
+  format-version: 3
+  spec-anchor: "table-spec#schema-evolution"
+  table-uuid: "6e7f8091-2233-4455-6677-8899aabbccdd"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,  type: int, required: true }
+      - { id: 2, name: val, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !int 1, val: !string "a" }
+      - { __rowkey: r2, id: !int 2, val: !string "b" }
+
+  - op: observe
+    at: latest
+    bind: pre
+
+  - op: evolve-schema
+    changes:
+      - kind: promote-type
+        field-id: 1
+        to: long
+
+  # current read: column is now long
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: a }
+          - { id: 2, val: b }
+
+  # time-travel to the pre-promotion snapshot: column reads as int (historical schema)
+  - op: observe
+    at: pre
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: a }
+          - { id: 2, val: b }

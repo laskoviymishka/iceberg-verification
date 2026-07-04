@@ -27,6 +27,7 @@ import (
 	"github.com/apache/iceberg-go/catalog"
 	iceio "github.com/apache/iceberg-go/io"
 	icetable "github.com/apache/iceberg-go/table"
+	"gopkg.in/yaml.v3"
 )
 
 // unsupportedError signals an op/kind this implementation does not support
@@ -154,9 +155,89 @@ func (r *runner) applyEntry(idx int, e Entry) error {
 		return r.doObserve(idx, e)
 	case "delete":
 		return r.doDelete(idx, e)
+	case "evolve-schema":
+		return r.doEvolveSchema(idx, e)
 	default:
 		return &unsupportedError{entryIdx: idx, feature: "op." + e.Op}
 	}
+}
+
+// evolveChange is one decoded evolve-schema change. Only the fields the runner
+// currently interprets (promote-type) are read.
+type evolveChange struct {
+	Kind    string    `yaml:"kind"`
+	FieldID int       `yaml:"field-id"`
+	To      yaml.Node `yaml:"to"`
+}
+
+// doEvolveSchema applies each schema change in one UpdateSchema commit. The
+// fixture references a column by its AUTHORED field-id; iceberg-go reassigns ids
+// at CreateTable, so we resolve the authored id to the column name (names survive
+// the reassignment) and drive UpdateColumn by name.
+func (r *runner) doEvolveSchema(idx int, e Entry) error {
+	tx := r.tbl.NewTransaction()
+	update := tx.UpdateSchema(true, false)
+	for ci, node := range e.Changes {
+		var c evolveChange
+		if err := node.Decode(&c); err != nil {
+			return fmt.Errorf("entry %d change %d: %w", idx, ci, err)
+		}
+		switch c.Kind {
+		case "promote-type":
+			name, ok := r.authoredName(c.FieldID)
+			if !ok {
+				return fmt.Errorf("entry %d change %d: no column for authored field-id %d", idx, ci, c.FieldID)
+			}
+			to, err := resolveType(&c.To)
+			if err != nil {
+				return fmt.Errorf("entry %d change %d: %w", idx, ci, err)
+			}
+			update.UpdateColumn([]string{name}, icetable.ColumnUpdate{
+				FieldType: iceberg.Optional[iceberg.Type]{Val: to, Valid: true},
+			})
+		default:
+			return &unsupportedError{entryIdx: idx, feature: "evolve-schema." + c.Kind}
+		}
+	}
+	if err := update.Commit(); err != nil {
+		return fmt.Errorf("entry %d evolve-schema: %w", idx, err)
+	}
+	tbl, err := tx.Commit(r.ctx)
+	if err != nil {
+		return fmt.Errorf("entry %d commit: %w", idx, err)
+	}
+	r.tbl = tbl
+	// schema changed -> relabel canonical ids by position against the new schema.
+	r.canonIDs = canonIDsFromSchema(r.tbl.Schema())
+	return r.recordSnapshot()
+}
+
+// schemaAt returns the schema as-of a snapshot id (the current schema when
+// snapID < 0, or when the snapshot has no schema-id / the schema is missing).
+// Under schema evolution a time-travel read must use the historical schema.
+func (r *runner) schemaAt(snapID int64) *iceberg.Schema {
+	if snapID < 0 {
+		return r.tbl.Schema()
+	}
+	snap := r.tbl.SnapshotByID(snapID)
+	if snap == nil || snap.SchemaID == nil {
+		return r.tbl.Schema()
+	}
+	if s, ok := r.tbl.Schemas()[*snap.SchemaID]; ok {
+		return s
+	}
+	return r.tbl.Schema()
+}
+
+// authoredName resolves a fixture-authored field-id to its column name by
+// inverting canonIDs (name -> authored id).
+func (r *runner) authoredName(fieldID int) (string, bool) {
+	for name, id := range r.canonIDs {
+		if id == fieldID {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 // doAppend builds an arrow table from the rows and commits one append snapshot.
@@ -325,21 +406,25 @@ func (r *runner) doObserve(idx int, e Entry) error {
 		return fmt.Errorf("entry %d observe: %w", idx, err)
 	}
 
+	// snapID is the snapshot the observe reads at; -1 means the latest.
 	var scan *icetable.Scan
+	snapID := int64(-1)
 	switch at.kind {
 	case atLatest:
 		scan = r.tbl.Scan()
 	case atBind:
-		snapID, ok := r.binds[at.bind]
+		id, ok := r.binds[at.bind]
 		if !ok {
 			return fmt.Errorf("entry %d observe: unknown bind %q", idx, at.bind)
 		}
+		snapID = id
 		scan = r.tbl.Scan(icetable.WithSnapshotID(snapID))
 	case atOrdinal:
-		snapID, ok := r.ordinalSnapshot(at.ordinal)
+		id, ok := r.ordinalSnapshot(at.ordinal)
 		if !ok {
 			return fmt.Errorf("entry %d observe: unknown ordinal %d", idx, at.ordinal)
 		}
+		snapID = id
 		scan = r.tbl.Scan(icetable.WithSnapshotID(snapID))
 	default:
 		return &unsupportedError{entryIdx: idx, feature: "time-travel"}
@@ -351,8 +436,13 @@ func (r *runner) doObserve(idx int, e Entry) error {
 	}
 	defer arrowTbl.Release()
 
-	fields := r.tbl.Schema().Fields()
-	icebergSchema, rows, err := decodeScan(arrowTbl, fields, r.canonIDs)
+	// A time-travel read must decode against the schema AS OF the observed
+	// snapshot, not the current one — after a promotion, an older snapshot still
+	// reads under its historical column types. Resolve that schema (and its
+	// canonical ids) for the scanned snapshot.
+	schema := r.schemaAt(snapID)
+	fields := schema.Fields()
+	icebergSchema, rows, err := decodeScan(arrowTbl, fields, canonIDsFromSchema(schema))
 	if err != nil {
 		return fmt.Errorf("entry %d decode: %w", idx, err)
 	}

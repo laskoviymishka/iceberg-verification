@@ -22,7 +22,10 @@ supports:
     - delete.merge-on-read.position       # PositionDeleteWriter + newRowDelta (positions self-computed)
     - time-travel
     - types.primitive                     # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
-    - evolve-schema                       # updateColumn promote + addColumn(name,type,doc,Literal) defaults
+    - evolve-schema.promote-type          # updateColumn type promotion (int->long, etc.)
+    - evolve-schema.add-column            # addColumn(name,type,doc,Literal) with initial+write defaults
+    - evolve-schema.drop-column           # deleteColumn
+    - evolve-schema.rename-column         # renameColumn (id preserved)
     - rewrite                             # table.newRewrite() consolidation (pure core)
 
 # NOT YET WIRED IN THE RUNNER (iceberg-java supports these in pure core; runner TODO):

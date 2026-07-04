@@ -104,6 +104,7 @@ func fixtureFeatures(data []byte) (source string, fmtVer *int, ops []Op, require
 	ordinal := 0
 	for _, e := range root.Entries {
 		op := Op{Op: e.Op, At: e.At, Bind: e.Bind, Strategy: e.Strategy, Kind: e.Kind}
+		var evolveKinds []string
 		switch e.Op {
 		case "append":
 			keys := rowKeys(e.Rows)
@@ -131,6 +132,7 @@ func fixtureFeatures(data []byte) (source string, fmtVer *int, ops []Op, require
 			lines := schemaChangeLines(e.Changes)
 			op.Summary = fmt.Sprintf("evolve schema (%d change%s) → snapshot %d", len(lines), plural(len(lines)), ordinal)
 			op.Detail = lines
+			evolveKinds = schemaChangeKinds(e.Changes)
 			ordinal++
 		case "evolve-spec":
 			op.Summary = fmt.Sprintf("evolve partition spec → snapshot %d", ordinal)
@@ -156,7 +158,7 @@ func fixtureFeatures(data []byte) (source string, fmtVer *int, ops []Op, require
 			op.Summary = e.Op
 		}
 		ops = append(ops, op)
-		recordRequired(e.Op, e.Strategy, e.Kind, fv, reqSet)
+		recordRequired(e.Op, e.Strategy, e.Kind, fv, evolveKinds, reqSet)
 	}
 
 	for k := range reqSet {
@@ -225,6 +227,22 @@ func predicateText(n yaml.Node) string {
 	return "predicate"
 }
 
+// schemaChangeKinds returns the `kind` of each evolve-schema change, for the
+// per-kind supports requirement.
+func schemaChangeKinds(changes []yaml.Node) []string {
+	var kinds []string
+	for _, c := range changes {
+		m := map[string]*yaml.Node{}
+		for i := 0; i+1 < len(c.Content); i += 2 {
+			m[c.Content[i].Value] = c.Content[i+1]
+		}
+		if k := valOf(m["kind"]); k != "" {
+			kinds = append(kinds, k)
+		}
+	}
+	return kinds
+}
+
 // schemaChangeLines renders each evolve-schema change as one readable line.
 func schemaChangeLines(changes []yaml.Node) []string {
 	var lines []string
@@ -280,14 +298,19 @@ func valOf(n *yaml.Node) string {
 
 // recordRequired maps an op (and a delete's strategy/kind, at a format version)
 // to the write feature key it exercises, for the supports.yaml cross-check.
-func recordRequired(op, strategy, kind string, formatVersion int, req map[string]bool) {
+// evolveKinds carries an evolve-schema entry's change kinds so the requirement
+// is granular (write.evolve-schema.promote-type vs .add-column) — an impl can
+// then claim exactly the subset of schema changes its runner wires.
+func recordRequired(op, strategy, kind string, formatVersion int, evolveKinds []string, req map[string]bool) {
 	switch op {
 	case "append":
 		req["write.append"] = true
 	case "rewrite":
 		req["write.rewrite"] = true
 	case "evolve-schema":
-		req["write.evolve-schema"] = true
+		for _, k := range evolveKinds {
+			req["write.evolve-schema."+k] = true
+		}
 	case "evolve-spec":
 		req["write.evolve-spec"] = true
 	case "overwrite":

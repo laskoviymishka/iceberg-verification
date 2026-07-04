@@ -19,14 +19,16 @@ supports:
     - types.primitive
     - delete.merge-on-read.position        # scan applies position deletes present in the table
   write:
-    # The runner dispatches append / observe / delete today (interpret.go
-    # applyEntry). rewrite / evolve-schema / evolve-spec / overwrite are NOT wired
-    # in the runner yet — listing them here would overclaim and the orchestrator
-    # would (correctly) flag them as drift.
+    # The runner dispatches append / observe / delete + evolve-schema promote-type
+    # today (interpret.go applyEntry / doEvolveSchema). Other evolve-schema kinds
+    # (add-column / drop / rename), rewrite, evolve-spec, overwrite are NOT wired
+    # yet — listing them here would overclaim and the orchestrator would (correctly)
+    # flag them as drift.
     - append
     - delete.merge-on-read.position        # write.delete.mode=merge-on-read -> Transaction.Delete
     - time-travel                          # WithSnapshotID
     - types.primitive
+    - evolve-schema.promote-type           # UpdateSchema.UpdateColumn (int->long); time-travel reads at schema-as-of-snapshot
 
 # DECLARED GAPS (runner exits 4 -> honest "unsupported" matrix cell):
 #   write.delete.copy-on-write                 # dispatch exists but corpus/runner path unproven

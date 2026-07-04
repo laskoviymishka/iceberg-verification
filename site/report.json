@@ -1,6 +1,6 @@
 {
   "schema": "iceberg-verification/report/v1",
-  "generated_at": "2026-07-04T19:19:33Z",
+  "generated_at": "2026-07-04T20:20:46Z",
   "runners": [
     {
       "name": "go",
@@ -16,7 +16,8 @@
           "append",
           "delete.merge-on-read.position",
           "time-travel",
-          "types.primitive"
+          "types.primitive",
+          "evolve-schema.promote-type"
         ]
       }
     },
@@ -51,7 +52,10 @@
           "delete.merge-on-read.position",
           "time-travel",
           "types.primitive",
-          "evolve-schema",
+          "evolve-schema.promote-type",
+          "evolve-schema.add-column",
+          "evolve-schema.drop-column",
+          "evolve-schema.rename-column",
           "rewrite"
         ]
       }
@@ -2377,7 +2381,7 @@
       ],
       "required": [
         "write.append",
-        "write.evolve-schema"
+        "write.evolve-schema.add-column"
       ],
       "has_golden": true,
       "golden": {
@@ -2490,6 +2494,404 @@
       "yaml": "# Spec — v3 add-column where initial-default != write-default. The sharp case\n# the equal-defaults fixture (v3_schema_evolution_defaults) can't reach: existing\n# rows must read the INITIAL default, while a later append that OMITS the column\n# must get the WRITE default. An impl that conflates the two reads wrong historic\n# data. Authored-golden (minted from iceberg-java, the reference).\n#\n# score: initial-default -1 (backfills rows written before the column existed),\n# write-default 0 (fills the column when a new row omits it). r1/r2 predate the\n# column -\u003e -1; r3 is appended after, omitting score -\u003e 0.\n\nheader:\n  id: v3_add_column_divergent_defaults\n  format-version: 3\n  spec-anchor: \"table-spec#default-values\"\n  table-uuid: \"6a7b8c9d-0e1f-2a3b-4c5d-6e7f80912233\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,   type: int, required: true }\n      - { id: 2, name: name, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !int 1, name: !string \"ann\" }\n      - { __rowkey: r2, id: !int 2, name: !string \"bob\" }\n\n  - op: evolve-schema\n    changes:\n      - kind: add-column\n        field:\n          id: 3\n          name: score\n          type: int\n          initial-default: !int -1     # existing rows (r1, r2) read -1\n          write-default: !int 0        # a new row omitting score gets 0\n\n  - op: append\n    rows:\n      - { __rowkey: r3, id: !int 3, name: !string \"cid\" }   # score omitted -\u003e write-default 0\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, name: ann, score: -1 }   # initial-default backfills existing rows\n          - { id: 2, name: bob, score: -1 }\n          - { id: 3, name: cid, score: 0 }    # write-default fills the omitted column\n"
     },
     {
+      "id": "v3_promote_int_to_long",
+      "source": "synthesized",
+      "format_version": 3,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
+        },
+        {
+          "op": "evolve-schema",
+          "summary": "evolve schema (1 change) → snapshot 1",
+          "detail": [
+            "promote field 1 → long"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        },
+        {
+          "op": "append",
+          "summary": "append 1 row → snapshot 2",
+          "detail": [
+            "rows r3"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append",
+        "write.evolve-schema.promote-type"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "a"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "42"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "b"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "a"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "42"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "b"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r3"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "10000000000"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "c"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 2,
+              "total-records": 2
+            }
+          },
+          {
+            "operation": "append",
+            "ordinal": 1,
+            "parent": 0,
+            "summary": {
+              "added-records": 1,
+              "total-records": 3
+            }
+          }
+        ],
+        "spec-id": "v3_promote_int_to_long"
+      },
+      "yaml": "# Spec — ISOLATED int -\u003e long type promotion (spec §schema-evolution, the one\n# widening the spec pins as always legal). Unlike v3_schema_evolution_defaults,\n# this exercises promote-type ALONE — no add-column bundled in — so it is the\n# clean, minimal pin for the promotion behavior itself:\n#\n#   1. append two rows while the column is `int`,\n#   2. promote the column int -\u003e long (no other change),\n#   3. read the pre-promotion rows back — they must now decode as `long`\n#      (JSON string per the 64-bit rule), same numeric values, no data rewrite,\n#   4. append a row with a value beyond int32 range (only valid as long),\n#   5. read all three — every value decodes as long, including the large one.\n#\n# The load-bearing assertions: the post-promotion iceberg-schema types the column\n# `long`, and the old int-written rows read back as long with identical values\n# (promotion is metadata-only; existing data files are not rewritten). An impl\n# that leaves the column typed int, or mis-widens the stored int bytes, fails.\n#\n# Authored-golden, minted from iceberg-java (the reference).\n\nheader:\n  id: v3_promote_int_to_long\n  format-version: 3\n  spec-anchor: \"table-spec#schema-evolution\"\n  table-uuid: \"5d6e7f80-9122-3344-5566-778899aabbcc\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: int, required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !int 1,  val: !string \"a\" }\n      - { __rowkey: r2, id: !int 42, val: !string \"b\" }\n\n  - op: evolve-schema\n    changes:\n      - kind: promote-type\n        field-id: 1\n        to: long\n\n  # pre-promotion rows read back as long, same values, no rewrite\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1,  val: a }\n          - { id: 42, val: b }\n\n  # a value only representable as long, written after the promotion\n  - op: append\n    rows:\n      - { __rowkey: r3, id: !long 10000000000, val: !string \"c\" }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1,           val: a }\n          - { id: 42,          val: b }\n          - { id: 10000000000, val: c }\n"
+    },
+    {
+      "id": "v3_promote_int_to_long_timetravel",
+      "source": "synthesized",
+      "format_version": 3,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "bind": "pre",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"pre\""
+          ]
+        },
+        {
+          "op": "evolve-schema",
+          "summary": "evolve schema (1 change) → snapshot 1",
+          "detail": [
+            "promote field 1 → long"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        },
+        {
+          "op": "observe",
+          "at": "pre",
+          "summary": "observe · time-travel to pre"
+        }
+      ],
+      "required": [
+        "write.append",
+        "write.evolve-schema.promote-type"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "pre",
+            "bind": "pre",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 1
+                },
+                "2": {
+                  "type": "string",
+                  "value": "a"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 2
+                },
+                "2": {
+                  "type": "string",
+                  "value": "b"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "int"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "a"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "b"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "at": "pre",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 1
+                },
+                "2": {
+                  "type": "string",
+                  "value": "a"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 2
+                },
+                "2": {
+                  "type": "string",
+                  "value": "b"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "int"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 2,
+              "total-records": 2
+            }
+          }
+        ],
+        "spec-id": "v3_promote_int_to_long_timetravel"
+      },
+      "yaml": "# Spec — int -\u003e long promotion crossed by TIME-TRAVEL. Pins the schema-at-snapshot\n# rule: a read at a pre-promotion snapshot must use the historical `int` schema,\n# while a read at the latest snapshot uses `long`. Same column, same rows; only\n# the schema the read resolves against differs by snapshot.\n#\n#   1. append two rows while the column is `int`; bind that snapshot as `pre`,\n#   2. promote int -\u003e long,\n#   3. observe latest  -\u003e column types `long`, values decode as long,\n#   4. observe at `pre` -\u003e column types `int`,  values decode as int.\n#\n# An impl that applies the CURRENT schema to a historical read (typing the old\n# snapshot `long`) fails the `pre` observation. Complements the isolated\n# promotion fixture by pinning the time-travel-across-evolution behavior.\n#\n# Authored-golden, minted from iceberg-java (the reference).\n\nheader:\n  id: v3_promote_int_to_long_timetravel\n  format-version: 3\n  spec-anchor: \"table-spec#schema-evolution\"\n  table-uuid: \"6e7f8091-2233-4455-6677-8899aabbccdd\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: int, required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !int 1, val: !string \"a\" }\n      - { __rowkey: r2, id: !int 2, val: !string \"b\" }\n\n  - op: observe\n    at: latest\n    bind: pre\n\n  - op: evolve-schema\n    changes:\n      - kind: promote-type\n        field-id: 1\n        to: long\n\n  # current read: column is now long\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, val: a }\n          - { id: 2, val: b }\n\n  # time-travel to the pre-promotion snapshot: column reads as int (historical schema)\n  - op: observe\n    at: pre\n    expect:\n      scan:\n        rows:\n          - { id: 1, val: a }\n          - { id: 2, val: b }\n"
+    },
+    {
       "id": "v3_rename_then_add_reused_name",
       "source": "synthesized",
       "format_version": 3,
@@ -2523,7 +2925,8 @@
       ],
       "required": [
         "write.append",
-        "write.evolve-schema"
+        "write.evolve-schema.add-column",
+        "write.evolve-schema.rename-column"
       ],
       "has_golden": true,
       "golden": {
@@ -2662,7 +3065,8 @@
       ],
       "required": [
         "write.append",
-        "write.evolve-schema"
+        "write.evolve-schema.add-column",
+        "write.evolve-schema.promote-type"
       ],
       "has_golden": true,
       "golden": {
@@ -3401,9 +3805,9 @@
       "status": "declared-gap",
       "detail": {
         "missing": [
-          "write.evolve-schema"
+          "write.evolve-schema.add-column"
         ],
-        "stderr": "unsupported: entry 1: unsupported feature \"op.evolve-schema\""
+        "stderr": "unsupported: entry 1: unsupported feature \"evolve-schema.add-column\""
       }
     },
     {
@@ -3412,7 +3816,7 @@
       "status": "declared-gap",
       "detail": {
         "missing": [
-          "write.evolve-schema"
+          "write.evolve-schema.add-column"
         ],
         "stderr": "unsupported: entry 1: evolve-schema.promote-type"
       }
@@ -3424,14 +3828,61 @@
       "detail": {}
     },
     {
+      "fixture": "v3_promote_int_to_long",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v3_promote_int_to_long",
+      "runner": "rust",
+      "status": "declared-gap",
+      "detail": {
+        "missing": [
+          "write.evolve-schema.promote-type"
+        ],
+        "stderr": "unsupported: entry 1: evolve-schema.promote-type"
+      }
+    },
+    {
+      "fixture": "v3_promote_int_to_long",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v3_promote_int_to_long_timetravel",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v3_promote_int_to_long_timetravel",
+      "runner": "rust",
+      "status": "declared-gap",
+      "detail": {
+        "missing": [
+          "write.evolve-schema.promote-type"
+        ],
+        "stderr": "unsupported: entry 2: evolve-schema.promote-type"
+      }
+    },
+    {
+      "fixture": "v3_promote_int_to_long_timetravel",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
       "fixture": "v3_rename_then_add_reused_name",
       "runner": "go",
       "status": "declared-gap",
       "detail": {
         "missing": [
-          "write.evolve-schema"
+          "write.evolve-schema.add-column",
+          "write.evolve-schema.rename-column"
         ],
-        "stderr": "unsupported: entry 1: unsupported feature \"op.evolve-schema\""
+        "stderr": "unsupported: entry 1: unsupported feature \"evolve-schema.rename-column\""
       }
     },
     {
@@ -3440,7 +3891,8 @@
       "status": "declared-gap",
       "detail": {
         "missing": [
-          "write.evolve-schema"
+          "write.evolve-schema.add-column",
+          "write.evolve-schema.rename-column"
         ],
         "stderr": "unsupported: entry 1: evolve-schema.promote-type"
       }
@@ -3457,9 +3909,9 @@
       "status": "declared-gap",
       "detail": {
         "missing": [
-          "write.evolve-schema"
+          "write.evolve-schema.add-column"
         ],
-        "stderr": "unsupported: entry 2: unsupported feature \"op.evolve-schema\""
+        "stderr": "unsupported: entry 2: unsupported feature \"evolve-schema.add-column\""
       }
     },
     {
@@ -3468,7 +3920,8 @@
       "status": "declared-gap",
       "detail": {
         "missing": [
-          "write.evolve-schema"
+          "write.evolve-schema.add-column",
+          "write.evolve-schema.promote-type"
         ],
         "stderr": "unsupported: entry 2: evolve-schema.promote-type"
       }

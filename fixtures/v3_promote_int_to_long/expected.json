@@ -1,0 +1,119 @@
+{
+  "spec-id" : "v3_promote_int_to_long",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 2,
+      "added-records" : 2
+    }
+  }, {
+    "ordinal" : 1,
+    "parent" : 0,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 3,
+      "added-records" : 1
+    }
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "1"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "a"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "42"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "b"
+      }
+    } ]
+  }, {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "1"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "a"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "42"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "b"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r3"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "10000000000"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "c"
+      }
+    } ]
+  } ]
+}
