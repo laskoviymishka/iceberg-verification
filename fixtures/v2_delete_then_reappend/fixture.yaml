@@ -1,0 +1,45 @@
+# Spec — v2 delete a row, then append a NEW row with the same user id. Classic
+# DML lifecycle: delete-is-set-minus, then a re-insert is a distinct live row
+# (new __rowkey). Pins that the position delete does NOT suppress the later
+# re-added row (deletes are scoped to the data file+position they targeted, not
+# to the id value). Authored-golden (minted from iceberg-java).
+
+header:
+  id: v2_delete_then_reappend
+  format-version: 2
+  spec-anchor: "table-spec#row-level-deletes"
+  table-uuid: "1f2a3b4c-5d6e-7f80-9122-334455667788"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,  type: long,   required: true }
+      - { id: 2, name: val, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, val: !string "first" }
+      - { __rowkey: r2, id: !long 2, val: !string "keep" }
+
+  - op: delete
+    strategy: merge-on-read
+    kind: position
+    predicate: { type: eq, term: id, value: !long 1 }
+    expect:
+      snapshot: { operation: delete }
+      delete-file: { content: 1 }
+
+  - op: append
+    rows:
+      - { __rowkey: r3, id: !long 1, val: !string "second" }   # same id 1, new row
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 2, val: keep }
+          - { id: 1, val: second }   # the re-added id=1 survives; the deleted one does not

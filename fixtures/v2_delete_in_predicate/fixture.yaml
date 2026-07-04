@@ -1,0 +1,45 @@
+# Spec — v2 merge-on-read delete with an IN predicate (delete id in [1, 3]).
+# Classic set-based DML: a single delete removes a discontiguous set of rows.
+# Authored-golden (minted from iceberg-java). Exercises the runner's SetPredicate
+# lowering and the delete-is-set-minus result.
+
+header:
+  id: v2_delete_in_predicate
+  format-version: 2
+  spec-anchor: "table-spec#row-level-deletes"
+  table-uuid: "8c9d0e1f-2a3b-4c5d-6e7f-809122334455"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,       type: long,   required: true }
+      - { id: 2, name: category, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, category: !string "a" }
+      - { __rowkey: r2, id: !long 2, category: !string "b" }
+      - { __rowkey: r3, id: !long 3, category: !string "a" }
+      - { __rowkey: r4, id: !long 4, category: !string "c" }
+
+  - op: delete
+    strategy: merge-on-read
+    kind: position
+    predicate:
+      type: in
+      term: id
+      values: [ !long 1, !long 3 ]
+    expect:
+      snapshot: { operation: delete }
+      delete-file: { content: 1 }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 2, category: b }
+          - { id: 4, category: c }

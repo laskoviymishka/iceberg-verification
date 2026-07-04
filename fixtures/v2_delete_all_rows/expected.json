@@ -1,0 +1,42 @@
+{
+  "spec-id" : "v2_delete_all_rows",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 2,
+      "added-records" : 2
+    }
+  }, {
+    "ordinal" : 1,
+    "parent" : 0,
+    "operation" : "delete",
+    "summary" : {
+      "total-records" : 2,
+      "total-delete-files" : 1
+    },
+    "delete-files" : [ {
+      "content" : 1,
+      "format" : "parquet"
+    } ]
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ ]
+  } ]
+}

@@ -1,0 +1,81 @@
+{
+  "spec-id" : "v2_delete_range_and",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 5,
+      "added-records" : 5
+    }
+  }, {
+    "ordinal" : 1,
+    "parent" : 0,
+    "operation" : "delete",
+    "summary" : {
+      "total-records" : 5,
+      "total-delete-files" : 1
+    },
+    "delete-files" : [ {
+      "content" : 1,
+      "format" : "parquet"
+    } ]
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "1"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "a"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r4"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "4"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "d"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r5"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "5"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "e"
+      }
+    } ]
+  } ]
+}

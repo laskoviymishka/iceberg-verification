@@ -1,0 +1,48 @@
+# Spec — v2 merge-on-read delete with a compound AND range predicate
+# (delete where id >= 2 AND id < 4). Classic range DML: tests the runner's
+# NewAnd lowering and that both bounds apply (inclusive lower, exclusive upper).
+# Authored-golden (minted from iceberg-java).
+
+header:
+  id: v2_delete_range_and
+  format-version: 2
+  spec-anchor: "table-spec#row-level-deletes"
+  table-uuid: "9d0e1f2a-3b4c-5d6e-7f80-912233445566"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,  type: long,   required: true }
+      - { id: 2, name: val, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, val: !string "a" }
+      - { __rowkey: r2, id: !long 2, val: !string "b" }
+      - { __rowkey: r3, id: !long 3, val: !string "c" }
+      - { __rowkey: r4, id: !long 4, val: !string "d" }
+      - { __rowkey: r5, id: !long 5, val: !string "e" }
+
+  - op: delete
+    strategy: merge-on-read
+    kind: position
+    predicate:
+      type: and
+      args:
+        - { type: gt-eq, term: id, value: !long 2 }
+        - { type: lt,    term: id, value: !long 4 }
+    expect:
+      snapshot: { operation: delete }
+      delete-file: { content: 1 }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: a }
+          - { id: 4, val: d }
+          - { id: 5, val: e }

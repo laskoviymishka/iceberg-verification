@@ -1,0 +1,191 @@
+{
+  "spec-id" : "v2_multi_delete_sequence",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 4,
+      "added-records" : 4
+    }
+  }, {
+    "ordinal" : 1,
+    "parent" : 0,
+    "operation" : "delete",
+    "summary" : {
+      "total-records" : 4,
+      "total-delete-files" : 1
+    },
+    "delete-files" : [ {
+      "content" : 1,
+      "format" : "parquet"
+    } ]
+  }, {
+    "ordinal" : 2,
+    "parent" : 1,
+    "operation" : "delete",
+    "summary" : {
+      "total-records" : 4,
+      "total-delete-files" : 2
+    },
+    "delete-files" : [ {
+      "content" : 1,
+      "format" : "parquet"
+    } ]
+  } ],
+  "observations" : [ {
+    "at" : "after-first-delete",
+    "bind" : "after-first-delete",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "2"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "b"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r3"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "3"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "c"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r4"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "4"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "d"
+      }
+    } ]
+  }, {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "2"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "b"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r4"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "4"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "d"
+      }
+    } ]
+  }, {
+    "at" : "after-first-delete",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "2"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "b"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r3"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "3"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "c"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r4"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "4"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "d"
+      }
+    } ]
+  } ]
+}
