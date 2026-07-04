@@ -1,0 +1,56 @@
+{
+  "spec-id" : "v1_int_vs_long",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 2,
+      "added-records" : 2
+    }
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "c_int",
+      "type" : "int"
+    }, {
+      "field-id" : 2,
+      "name" : "c_long",
+      "type" : "long"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 1
+      },
+      "2" : {
+        "type" : "long",
+        "value" : "1"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 42
+      },
+      "2" : {
+        "type" : "long",
+        "value" : "10000000000"
+      }
+    } ]
+  } ]
+}

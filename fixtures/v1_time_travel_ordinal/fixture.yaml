@@ -1,0 +1,60 @@
+# Spec — v1 time-travel on a pure-append history, by BOTH ordinal and bind.
+# Complements v2_append_timetravel (bind only) by pinning ordinal addressing
+# (observe at: 0). Authored-golden, green on the current runners.
+#
+# Pins that ordinal 0 and bind "after-first" resolve to the identical snapshot.
+
+header:
+  id: v1_time_travel_ordinal
+  format-version: 1
+  spec-anchor: "table-spec#point-in-time-reads"
+  table-uuid: "3d4e5f60-7182-93a4-b5c6-d7e8f9011223"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,  type: long, required: true }
+      - { id: 2, name: val, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, val: !string "x" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    bind: after-first
+
+  - op: append
+    rows:
+      - { __rowkey: r2, id: !long 2, val: !string "y" }
+    expect:
+      snapshot: { operation: append }
+
+  # travel by explicit commit ordinal 0
+  - op: observe
+    at: 0
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: x }
+
+  # travel by bind name to the same point
+  - op: observe
+    at: after-first
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: x }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: x }
+          - { id: 2, val: y }

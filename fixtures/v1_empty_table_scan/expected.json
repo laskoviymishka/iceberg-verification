@@ -1,0 +1,21 @@
+{
+  "spec-id" : "v1_empty_table_scan",
+  "accept" : true,
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "val",
+      "type" : "string"
+    } ],
+    "decoded-rows" : [ ]
+  } ]
+}

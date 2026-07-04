@@ -1,0 +1,89 @@
+{
+  "spec-id" : "v1_required_optional_nulls",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 3,
+      "added-records" : 3
+    }
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "req",
+      "type" : "long"
+    }, {
+      "field-id" : 2,
+      "name" : "opt_str",
+      "type" : "string"
+    }, {
+      "field-id" : 3,
+      "name" : "opt_bool",
+      "type" : "boolean"
+    }, {
+      "field-id" : 4,
+      "name" : "opt_dbl",
+      "type" : "double"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "1"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "present"
+      },
+      "3" : {
+        "type" : "boolean",
+        "value" : true
+      },
+      "4" : {
+        "type" : "double",
+        "value" : 1.5
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "2"
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r3"
+      },
+      "1" : {
+        "type" : "long",
+        "value" : "3"
+      },
+      "2" : {
+        "type" : "string",
+        "value" : ""
+      },
+      "3" : {
+        "type" : "boolean",
+        "value" : false
+      },
+      "4" : {
+        "type" : "double",
+        "value" : 0.0
+      }
+    } ]
+  } ]
+}

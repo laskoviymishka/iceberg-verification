@@ -25,7 +25,10 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Result, anyhow, bail};
-use arrow_array::{Array, Int32Array, Int64Array, RecordBatch, StringArray};
+use arrow_array::{
+    Array, BooleanArray, Float32Array, Float64Array, Int32Array, Int64Array, RecordBatch,
+    StringArray,
+};
 use iceberg::spec::NestedFieldRef;
 
 use crate::emit::{DecodedRow, SchemaField, ValueNode};
@@ -104,8 +107,34 @@ fn decode_cell(arr: &dyn Array, i: usize, type_name: &str) -> Result<Option<Valu
             value: serde_json::Value::String(a.value(i).to_string()),
         }));
     }
+    if let Some(a) = arr.as_any().downcast_ref::<BooleanArray>() {
+        return Ok(Some(ValueNode {
+            type_name: type_name.to_string(),
+            value: serde_json::Value::Bool(a.value(i)),
+        }));
+    }
+    if let Some(a) = arr.as_any().downcast_ref::<Float32Array>() {
+        return Ok(Some(ValueNode {
+            type_name: type_name.to_string(),
+            value: json_number_f64(a.value(i) as f64)?,
+        }));
+    }
+    if let Some(a) = arr.as_any().downcast_ref::<Float64Array>() {
+        return Ok(Some(ValueNode {
+            type_name: type_name.to_string(),
+            value: json_number_f64(a.value(i))?,
+        }));
+    }
     bail!(
         "unsupported arrow type {:?} for iceberg type {type_name} (Phase 4)",
         arr.data_type()
     )
+}
+
+/// A finite f64 as a JSON number. NaN/±Inf have no JSON representation, so they
+/// are an explicit error rather than a silent null.
+fn json_number_f64(v: f64) -> Result<serde_json::Value> {
+    serde_json::Number::from_f64(v)
+        .map(serde_json::Value::Number)
+        .ok_or_else(|| anyhow!("non-finite float {v} has no JSON representation"))
 }

@@ -25,7 +25,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow, bail};
-use arrow_array::builder::{Int32Builder, Int64Builder, StringBuilder};
+use arrow_array::builder::{
+    BooleanBuilder, Float32Builder, Float64Builder, Int32Builder, Int64Builder, StringBuilder,
+};
 use arrow_array::{ArrayRef, RecordBatch};
 use arrow_schema::{DataType, Schema as ArrowSchema};
 use iceberg::arrow::schema_to_arrow_schema;
@@ -97,6 +99,45 @@ fn build_column(dt: &DataType, name: &str, rows: &[Row]) -> Result<ArrayRef> {
                 match row.values.get(name) {
                     Some(TypedValue::Primitive { scalar, .. }) => {
                         b.append_value(scalar.parse::<i64>()?)
+                    }
+                    Some(TypedValue::Null) | None => b.append_null(),
+                    Some(other) => bail!("column {name}: expected primitive, got {other:?}"),
+                }
+            }
+            Ok(Arc::new(b.finish()))
+        }
+        DataType::Boolean => {
+            let mut b = BooleanBuilder::new();
+            for row in rows {
+                match row.values.get(name) {
+                    Some(TypedValue::Primitive { scalar, .. }) => {
+                        b.append_value(scalar.parse::<bool>()?)
+                    }
+                    Some(TypedValue::Null) | None => b.append_null(),
+                    Some(other) => bail!("column {name}: expected primitive, got {other:?}"),
+                }
+            }
+            Ok(Arc::new(b.finish()))
+        }
+        DataType::Float32 => {
+            let mut b = Float32Builder::new();
+            for row in rows {
+                match row.values.get(name) {
+                    Some(TypedValue::Primitive { scalar, .. }) => {
+                        b.append_value(scalar.parse::<f32>()?)
+                    }
+                    Some(TypedValue::Null) | None => b.append_null(),
+                    Some(other) => bail!("column {name}: expected primitive, got {other:?}"),
+                }
+            }
+            Ok(Arc::new(b.finish()))
+        }
+        DataType::Float64 => {
+            let mut b = Float64Builder::new();
+            for row in rows {
+                match row.values.get(name) {
+                    Some(TypedValue::Primitive { scalar, .. }) => {
+                        b.append_value(scalar.parse::<f64>()?)
                     }
                     Some(TypedValue::Null) | None => b.append_null(),
                     Some(other) => bail!("column {name}: expected primitive, got {other:?}"),

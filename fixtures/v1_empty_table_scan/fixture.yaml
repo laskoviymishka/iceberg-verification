@@ -1,0 +1,28 @@
+# Spec — create a v1 table and observe it with NO append. The table has no
+# snapshot; a scan must return zero rows (not error). Pins the empty/zero state.
+# Authored-golden.
+#
+# NOTE: this is the nearest expressible form of "empty append" — opAppend
+# requires >=1 row (l-log.schema.json rows.minItems=1), so a true 0-row append
+# cannot be authored yet (a flagged schema gap).
+
+header:
+  id: v1_empty_table_scan
+  format-version: 1
+  spec-anchor: "table-spec#snapshots"
+  table-uuid: "4e5f6071-8293-a4b5-c6d7-e8f901122334"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,  type: long, required: true }
+      - { id: 2, name: val, type: string }
+
+entries:
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows: []

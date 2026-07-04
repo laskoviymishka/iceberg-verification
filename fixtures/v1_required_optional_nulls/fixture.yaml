@@ -1,0 +1,42 @@
+# Spec — required vs optional fields and per-column null handling. req is
+# required and present on every row; opt_* are optional and null on some rows.
+# Restricted to scalar types the runners decode today (boolean/long/double/
+# string), so it is green now. Authored-golden.
+#
+# Pins three distinctions no existing fixture covers: (a) null vs present,
+# (b) empty-string "" is a present value distinct from null, (c) 0.0 is a
+# present value distinct from null, and it exercises boolean decode.
+
+header:
+  id: v1_required_optional_nulls
+  format-version: 1
+  spec-anchor: "table-spec#nested-types"
+  table-uuid: "5f607182-93a4-b5c6-d7e8-f90112233445"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: req,      type: long,    required: true }
+      - { id: 2, name: opt_str,  type: string }
+      - { id: 3, name: opt_bool, type: boolean }
+      - { id: 4, name: opt_dbl,  type: double }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, req: !long 1, opt_str: !string "present", opt_bool: !boolean true,  opt_dbl: !double 1.5 }
+      - { __rowkey: r2, req: !long 2, opt_str: !null null,        opt_bool: !null null,     opt_dbl: !null null }
+      - { __rowkey: r3, req: !long 3, opt_str: !string "",        opt_bool: !boolean false, opt_dbl: !double 0.0 }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { req: 1, opt_str: present, opt_bool: true,  opt_dbl: 1.5 }
+          - { req: 2, opt_str: null,    opt_bool: null,  opt_dbl: null }
+          - { req: 3, opt_str: "",      opt_bool: false, opt_dbl: 0.0 }

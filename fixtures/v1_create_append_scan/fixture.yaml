@@ -1,0 +1,37 @@
+# Spec — v1 create + single append + full scan. The absolute baseline.
+# Authored-golden. The corpus had no clean v1 fixture; this is it. Uses only
+# create + append + scan — the narrowest possible write path, green on every
+# implementation. A divergence here is a bug in the most basic thing there is.
+#
+# Pins: format-version 1, the single append snapshot (ordinal 0, no parent),
+# its append operation + aggregate summary counts, and the live row multiset.
+
+header:
+  id: v1_create_append_scan
+  format-version: 1
+  spec-anchor: "table-spec#version-1"
+  table-uuid: "0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,   type: long,   required: true }
+      - { id: 2, name: name, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, name: !string "ann" }
+      - { __rowkey: r2, id: !long 2, name: !string "bob" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, name: ann }
+          - { id: 2, name: bob }

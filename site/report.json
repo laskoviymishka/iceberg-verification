@@ -1,6 +1,6 @@
 {
   "schema": "iceberg-verification/report/v1",
-  "generated_at": "2026-07-04T17:47:46Z",
+  "generated_at": "2026-07-04T18:32:28Z",
   "runners": [
     {
       "name": "go",
@@ -58,6 +58,743 @@
     }
   ],
   "fixtures": [
+    {
+      "id": "v1_create_append_scan",
+      "source": "synthesized",
+      "format_version": 1,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "ann"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "bob"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "name",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 2,
+              "total-records": 2
+            }
+          }
+        ],
+        "spec-id": "v1_create_append_scan"
+      },
+      "yaml": "# Spec — v1 create + single append + full scan. The absolute baseline.\n# Authored-golden. The corpus had no clean v1 fixture; this is it. Uses only\n# create + append + scan — the narrowest possible write path, green on every\n# implementation. A divergence here is a bug in the most basic thing there is.\n#\n# Pins: format-version 1, the single append snapshot (ordinal 0, no parent),\n# its append operation + aggregate summary counts, and the live row multiset.\n\nheader:\n  id: v1_create_append_scan\n  format-version: 1\n  spec-anchor: \"table-spec#version-1\"\n  table-uuid: \"0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,   type: long,   required: true }\n      - { id: 2, name: name, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !long 1, name: !string \"ann\" }\n      - { __rowkey: r2, id: !long 2, name: !string \"bob\" }\n    expect:\n      snapshot: { operation: append }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, name: ann }\n          - { id: 2, name: bob }\n"
+    },
+    {
+      "id": "v1_empty_table_scan",
+      "source": "synthesized",
+      "format_version": 1,
+      "ops": [
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "spec-id": "v1_empty_table_scan"
+      },
+      "yaml": "# Spec — create a v1 table and observe it with NO append. The table has no\n# snapshot; a scan must return zero rows (not error). Pins the empty/zero state.\n# Authored-golden.\n#\n# NOTE: this is the nearest expressible form of \"empty append\" — opAppend\n# requires \u003e=1 row (l-log.schema.json rows.minItems=1), so a true 0-row append\n# cannot be authored yet (a flagged schema gap).\n\nheader:\n  id: v1_empty_table_scan\n  format-version: 1\n  spec-anchor: \"table-spec#snapshots\"\n  table-uuid: \"4e5f6071-8293-a4b5-c6d7-e8f901122334\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: long, required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows: []\n"
+    },
+    {
+      "id": "v1_int_vs_long",
+      "source": "synthesized",
+      "format_version": 1,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 1
+                },
+                "2": {
+                  "type": "long",
+                  "value": "1"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 42
+                },
+                "2": {
+                  "type": "long",
+                  "value": "10000000000"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "c_int",
+                "type": "int"
+              },
+              {
+                "field-id": 2,
+                "name": "c_long",
+                "type": "long"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 2,
+              "total-records": 2
+            }
+          }
+        ],
+        "spec-id": "v1_int_vs_long"
+      },
+      "yaml": "# Spec — the int-vs-long distinction (apache/iceberg-go#880), minimal form.\n# c_int is int32; c_long is int64 with a value \u003e int32 max, so an implementation\n# that conflates the two cannot pass. Authored-golden. Green on the current\n# runners (int32/int64 both decode).\n#\n# The machine-checkable form of #880 lives in the golden: c_int decodes to a\n# JSON number, c_long to a JSON string (the 64-bit rule) — and the iceberg-schema\n# types \"int\" vs \"long\" are themselves an assertion.\n\nheader:\n  id: v1_int_vs_long\n  format-version: 1\n  spec-anchor: \"table-spec#primitive-types\"\n  table-uuid: \"2c3d4e5f-6071-8293-a4b5-c6d7e8f90112\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: c_int,  type: int,  required: true }\n      - { id: 2, name: c_long, type: long, required: true }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, c_int: !int 1,  c_long: !long 1 }             # same numeral, different width\n      - { __rowkey: r2, c_int: !int 42, c_long: !long 10000000000 }   # \u003e int32 max: only valid as long\n    expect:\n      snapshot: { operation: append }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { c_int: 1,  c_long: 1 }\n          - { c_int: 42, c_long: 10000000000 }\n"
+    },
+    {
+      "id": "v1_multi_append_lineage",
+      "source": "synthesized",
+      "format_version": 1,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 1 row → snapshot 0",
+          "detail": [
+            "rows r1"
+          ]
+        },
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 1",
+          "detail": [
+            "rows r2, r3"
+          ]
+        },
+        {
+          "op": "append",
+          "summary": "append 1 row → snapshot 2",
+          "detail": [
+            "rows r4"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r4"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "4"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "d"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "b"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r3"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "3"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "c"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "a"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 1,
+              "total-records": 1
+            }
+          },
+          {
+            "operation": "append",
+            "ordinal": 1,
+            "parent": 0,
+            "summary": {
+              "added-records": 2,
+              "total-records": 3
+            }
+          },
+          {
+            "operation": "append",
+            "ordinal": 2,
+            "parent": 1,
+            "summary": {
+              "added-records": 1,
+              "total-records": 4
+            }
+          }
+        ],
+        "spec-id": "v1_multi_append_lineage"
+      },
+      "yaml": "# Spec — v1 three sequential appends. Pins snapshot lineage (0\u003c-1\u003c-2) and the\n# per-append summary metrics (added-records is this commit's contribution,\n# total-records is the running live count). Authored-golden.\n#\n# Every append is a fast-append adding one manifest; the parent chain (parent =\n# previous ordinal) is the load-bearing assertion — it isn't pinned anywhere\n# else in the corpus.\n\nheader:\n  id: v1_multi_append_lineage\n  format-version: 1\n  spec-anchor: \"table-spec#snapshots\"\n  table-uuid: \"1b2c3d4e-5f60-7182-93a4-b5c6d7e8f901\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: long, required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !long 1, val: !string \"a\" }\n    expect:\n      snapshot: { operation: append }\n\n  - op: append\n    rows:\n      - { __rowkey: r2, id: !long 2, val: !string \"b\" }\n      - { __rowkey: r3, id: !long 3, val: !string \"c\" }\n    expect:\n      snapshot: { operation: append }\n\n  - op: append\n    rows:\n      - { __rowkey: r4, id: !long 4, val: !string \"d\" }\n    expect:\n      snapshot: { operation: append }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, val: a }\n          - { id: 2, val: b }\n          - { id: 3, val: c }\n          - { id: 4, val: d }\n"
+    },
+    {
+      "id": "v1_required_optional_nulls",
+      "source": "synthesized",
+      "format_version": 1,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 3 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2, r3"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "present"
+                },
+                "3": {
+                  "type": "boolean",
+                  "value": true
+                },
+                "4": {
+                  "type": "double",
+                  "value": 1.5
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r3"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "3"
+                },
+                "2": {
+                  "type": "string",
+                  "value": ""
+                },
+                "3": {
+                  "type": "boolean",
+                  "value": false
+                },
+                "4": {
+                  "type": "double",
+                  "value": 0
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "req",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "opt_str",
+                "type": "string"
+              },
+              {
+                "field-id": 3,
+                "name": "opt_bool",
+                "type": "boolean"
+              },
+              {
+                "field-id": 4,
+                "name": "opt_dbl",
+                "type": "double"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 3,
+              "total-records": 3
+            }
+          }
+        ],
+        "spec-id": "v1_required_optional_nulls"
+      },
+      "yaml": "# Spec — required vs optional fields and per-column null handling. req is\n# required and present on every row; opt_* are optional and null on some rows.\n# Restricted to scalar types the runners decode today (boolean/long/double/\n# string), so it is green now. Authored-golden.\n#\n# Pins three distinctions no existing fixture covers: (a) null vs present,\n# (b) empty-string \"\" is a present value distinct from null, (c) 0.0 is a\n# present value distinct from null, and it exercises boolean decode.\n\nheader:\n  id: v1_required_optional_nulls\n  format-version: 1\n  spec-anchor: \"table-spec#nested-types\"\n  table-uuid: \"5f607182-93a4-b5c6-d7e8-f90112233445\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: req,      type: long,    required: true }\n      - { id: 2, name: opt_str,  type: string }\n      - { id: 3, name: opt_bool, type: boolean }\n      - { id: 4, name: opt_dbl,  type: double }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, req: !long 1, opt_str: !string \"present\", opt_bool: !boolean true,  opt_dbl: !double 1.5 }\n      - { __rowkey: r2, req: !long 2, opt_str: !null null,        opt_bool: !null null,     opt_dbl: !null null }\n      - { __rowkey: r3, req: !long 3, opt_str: !string \"\",        opt_bool: !boolean false, opt_dbl: !double 0.0 }\n    expect:\n      snapshot: { operation: append }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { req: 1, opt_str: present, opt_bool: true,  opt_dbl: 1.5 }\n          - { req: 2, opt_str: null,    opt_bool: null,  opt_dbl: null }\n          - { req: 3, opt_str: \"\",      opt_bool: false, opt_dbl: 0.0 }\n"
+    },
+    {
+      "id": "v1_time_travel_ordinal",
+      "source": "synthesized",
+      "format_version": 1,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 1 row → snapshot 0",
+          "detail": [
+            "rows r1"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "bind": "after-first",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"after-first\""
+          ]
+        },
+        {
+          "op": "append",
+          "summary": "append 1 row → snapshot 1",
+          "detail": [
+            "rows r2"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "0",
+          "summary": "observe · time-travel to 0"
+        },
+        {
+          "op": "observe",
+          "at": "after-first",
+          "summary": "observe · time-travel to after-first"
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "after-first",
+            "bind": "after-first",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "x"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "at": 0,
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "x"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "at": "after-first",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "x"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "y"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "string",
+                  "value": "x"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "val",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 1,
+              "total-records": 1
+            }
+          },
+          {
+            "operation": "append",
+            "ordinal": 1,
+            "parent": 0,
+            "summary": {
+              "added-records": 1,
+              "total-records": 2
+            }
+          }
+        ],
+        "spec-id": "v1_time_travel_ordinal"
+      },
+      "yaml": "# Spec — v1 time-travel on a pure-append history, by BOTH ordinal and bind.\n# Complements v2_append_timetravel (bind only) by pinning ordinal addressing\n# (observe at: 0). Authored-golden, green on the current runners.\n#\n# Pins that ordinal 0 and bind \"after-first\" resolve to the identical snapshot.\n\nheader:\n  id: v1_time_travel_ordinal\n  format-version: 1\n  spec-anchor: \"table-spec#point-in-time-reads\"\n  table-uuid: \"3d4e5f60-7182-93a4-b5c6-d7e8f9011223\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: long, required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !long 1, val: !string \"x\" }\n    expect:\n      snapshot: { operation: append }\n\n  - op: observe\n    at: latest\n    bind: after-first\n\n  - op: append\n    rows:\n      - { __rowkey: r2, id: !long 2, val: !string \"y\" }\n    expect:\n      snapshot: { operation: append }\n\n  # travel by explicit commit ordinal 0\n  - op: observe\n    at: 0\n    expect:\n      scan:\n        rows:\n          - { id: 1, val: x }\n\n  # travel by bind name to the same point\n  - op: observe\n    at: after-first\n    expect:\n      scan:\n        rows:\n          - { id: 1, val: x }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, val: x }\n          - { id: 2, val: y }\n"
+    },
     {
       "id": "v2_append_posdelete_timetravel",
       "source": "synthesized",
@@ -923,6 +1660,114 @@
     }
   ],
   "cells": [
+    {
+      "fixture": "v1_create_append_scan",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_create_append_scan",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_create_append_scan",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_empty_table_scan",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_empty_table_scan",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_empty_table_scan",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_int_vs_long",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_int_vs_long",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_int_vs_long",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_multi_append_lineage",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_multi_append_lineage",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_multi_append_lineage",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_required_optional_nulls",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_required_optional_nulls",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_required_optional_nulls",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_time_travel_ordinal",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_time_travel_ordinal",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v1_time_travel_ordinal",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
     {
       "fixture": "v2_append_posdelete_timetravel",
       "runner": "go",

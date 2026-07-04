@@ -1,0 +1,51 @@
+# Spec — v1 three sequential appends. Pins snapshot lineage (0<-1<-2) and the
+# per-append summary metrics (added-records is this commit's contribution,
+# total-records is the running live count). Authored-golden.
+#
+# Every append is a fast-append adding one manifest; the parent chain (parent =
+# previous ordinal) is the load-bearing assertion — it isn't pinned anywhere
+# else in the corpus.
+
+header:
+  id: v1_multi_append_lineage
+  format-version: 1
+  spec-anchor: "table-spec#snapshots"
+  table-uuid: "1b2c3d4e-5f60-7182-93a4-b5c6d7e8f901"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,  type: long, required: true }
+      - { id: 2, name: val, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !long 1, val: !string "a" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: append
+    rows:
+      - { __rowkey: r2, id: !long 2, val: !string "b" }
+      - { __rowkey: r3, id: !long 3, val: !string "c" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: append
+    rows:
+      - { __rowkey: r4, id: !long 4, val: !string "d" }
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, val: a }
+          - { id: 2, val: b }
+          - { id: 3, val: c }
+          - { id: 4, val: d }

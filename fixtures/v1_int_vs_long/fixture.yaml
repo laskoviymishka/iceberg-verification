@@ -1,0 +1,38 @@
+# Spec — the int-vs-long distinction (apache/iceberg-go#880), minimal form.
+# c_int is int32; c_long is int64 with a value > int32 max, so an implementation
+# that conflates the two cannot pass. Authored-golden. Green on the current
+# runners (int32/int64 both decode).
+#
+# The machine-checkable form of #880 lives in the golden: c_int decodes to a
+# JSON number, c_long to a JSON string (the 64-bit rule) — and the iceberg-schema
+# types "int" vs "long" are themselves an assertion.
+
+header:
+  id: v1_int_vs_long
+  format-version: 1
+  spec-anchor: "table-spec#primitive-types"
+  table-uuid: "2c3d4e5f-6071-8293-a4b5-c6d7e8f90112"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: c_int,  type: int,  required: true }
+      - { id: 2, name: c_long, type: long, required: true }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, c_int: !int 1,  c_long: !long 1 }             # same numeral, different width
+      - { __rowkey: r2, c_int: !int 42, c_long: !long 10000000000 }   # > int32 max: only valid as long
+    expect:
+      snapshot: { operation: append }
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { c_int: 1,  c_long: 1 }
+          - { c_int: 42, c_long: 10000000000 }
