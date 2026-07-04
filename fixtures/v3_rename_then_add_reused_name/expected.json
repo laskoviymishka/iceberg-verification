@@ -1,0 +1,72 @@
+{
+  "spec-id" : "v3_rename_then_add_reused_name",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 2,
+      "added-records" : 2
+    }
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "a",
+      "type" : "int"
+    }, {
+      "field-id" : 2,
+      "name" : "b",
+      "type" : "string"
+    }, {
+      "field-id" : 3,
+      "name" : "c",
+      "type" : "int"
+    }, {
+      "field-id" : 4,
+      "name" : "d",
+      "type" : "int"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 1
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "x"
+      },
+      "3" : {
+        "type" : "int",
+        "value" : 300
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 2
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "y"
+      },
+      "3" : {
+        "type" : "int",
+        "value" : 301
+      }
+    } ]
+  } ]
+}

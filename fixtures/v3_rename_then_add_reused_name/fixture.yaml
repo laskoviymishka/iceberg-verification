@@ -1,0 +1,53 @@
+# Spec — reads bind by FIELD-ID, never by name. Write rows under {a, b, d}
+# (ids 1,2,3); rename field-id 3 (d -> c); then add a NEW column also named "d"
+# (fresh id 4). Old rows must surface their id-3 value under the renamed name
+# "c", and read NULL for the brand-new "d" (id 4) — they never had id-4 data.
+# An impl that resolves columns by name (or reuses physical positions) returns
+# the wrong column. Authored-golden (minted from iceberg-java).
+
+header:
+  id: v3_rename_then_add_reused_name
+  format-version: 3
+  spec-anchor: "table-spec#column-projection"
+  table-uuid: "7b8c9d0e-1f2a-3b4c-5d6e-7f8091223344"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: a, type: int, required: true }
+      - { id: 2, name: b, type: string }
+      - { id: 3, name: d, type: int }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, a: !int 1, b: !string "x", d: !int 300 }
+      - { __rowkey: r2, a: !int 2, b: !string "y", d: !int 301 }
+
+  # Two SEPARATE commits: a rename and an add-of-the-freed-name cannot share one
+  # updateSchema transaction (the conflict guard validates against the original
+  # schema, where "d" still exists). Rename first, commit, then add.
+  - op: evolve-schema
+    changes:
+      - kind: rename-column          # field-id 3: d -> c  (id preserved)
+        field-id: 3
+        to: c
+
+  - op: evolve-schema
+    changes:
+      - kind: add-column             # a brand-new "d" (fresh id 4), distinct from old id-3
+        field:
+          id: 4
+          name: d
+          type: int
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          # old id-3 value now reads under "c"; the new "d" (id 4) is null for old rows
+          - { a: 1, b: x, c: 300, d: null }
+          - { a: 2, b: y, c: 301, d: null }

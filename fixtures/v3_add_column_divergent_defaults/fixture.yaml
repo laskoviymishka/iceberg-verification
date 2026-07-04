@@ -1,0 +1,52 @@
+# Spec — v3 add-column where initial-default != write-default. The sharp case
+# the equal-defaults fixture (v3_schema_evolution_defaults) can't reach: existing
+# rows must read the INITIAL default, while a later append that OMITS the column
+# must get the WRITE default. An impl that conflates the two reads wrong historic
+# data. Authored-golden (minted from iceberg-java, the reference).
+#
+# score: initial-default -1 (backfills rows written before the column existed),
+# write-default 0 (fills the column when a new row omits it). r1/r2 predate the
+# column -> -1; r3 is appended after, omitting score -> 0.
+
+header:
+  id: v3_add_column_divergent_defaults
+  format-version: 3
+  spec-anchor: "table-spec#default-values"
+  table-uuid: "6a7b8c9d-0e1f-2a3b-4c5d-6e7f80912233"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,   type: int, required: true }
+      - { id: 2, name: name, type: string }
+
+entries:
+  - op: append
+    rows:
+      - { __rowkey: r1, id: !int 1, name: !string "ann" }
+      - { __rowkey: r2, id: !int 2, name: !string "bob" }
+
+  - op: evolve-schema
+    changes:
+      - kind: add-column
+        field:
+          id: 3
+          name: score
+          type: int
+          initial-default: !int -1     # existing rows (r1, r2) read -1
+          write-default: !int 0        # a new row omitting score gets 0
+
+  - op: append
+    rows:
+      - { __rowkey: r3, id: !int 3, name: !string "cid" }   # score omitted -> write-default 0
+
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, name: ann, score: -1 }   # initial-default backfills existing rows
+          - { id: 2, name: bob, score: -1 }
+          - { id: 3, name: cid, score: 0 }    # write-default fills the omitted column

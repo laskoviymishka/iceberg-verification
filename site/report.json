@@ -1,6 +1,6 @@
 {
   "schema": "iceberg-verification/report/v1",
-  "generated_at": "2026-07-04T18:32:28Z",
+  "generated_at": "2026-07-04T18:36:48Z",
   "runners": [
     {
       "name": "go",
@@ -1394,6 +1394,276 @@
       "yaml": "# Read-conformance fixture — load a checked-in v2 table and observe it.\n#\n# source: artifact means the runner does NOT build the table from an op-log; it\n# materializes the checked-in bytes/ (restoring them to the pinned root named in\n# bytes/ROOT) and loads the table read-only, then runs the observe entries. This\n# is the read side of the same contract: the observe -\u003e decode -\u003e canonical-emit\n# half is identical to the write (synthesized) fixtures.\n#\n# The bytes/ tree was minted by running fixtures/v2_append_timetravel through the\n# DML runner into the pinned root — so this fixture and its write sibling share a\n# golden's row-state, demonstrating that write-conformance mints read-conformance.\n\nheader:\n  id: v2_read_append_timetravel\n  format-version: 2\n  spec-anchor: \"table-spec#snapshots\"\n  source: artifact\n  artifact:\n    path: .        # bytes/ lives alongside this fixture.yaml\n\nentries:\n  # read the current table state (the two appends of the sibling write fixture)\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, category: a }\n          - { id: 2, category: b }\n          - { id: 3, category: a }\n"
     },
     {
+      "id": "v3_add_column_divergent_defaults",
+      "source": "synthesized",
+      "format_version": 3,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
+        },
+        {
+          "op": "evolve-schema",
+          "summary": "evolve schema (1 change) → snapshot 1",
+          "detail": [
+            "add column score int default -1"
+          ]
+        },
+        {
+          "op": "append",
+          "summary": "append 1 row → snapshot 2",
+          "detail": [
+            "rows r3"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append",
+        "write.evolve-schema"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r3"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 3
+                },
+                "2": {
+                  "type": "string",
+                  "value": "cid"
+                },
+                "3": {
+                  "type": "int",
+                  "value": 0
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 1
+                },
+                "2": {
+                  "type": "string",
+                  "value": "ann"
+                },
+                "3": {
+                  "type": "int",
+                  "value": -1
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 2
+                },
+                "2": {
+                  "type": "string",
+                  "value": "bob"
+                },
+                "3": {
+                  "type": "int",
+                  "value": -1
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "int"
+              },
+              {
+                "field-id": 2,
+                "name": "name",
+                "type": "string"
+              },
+              {
+                "field-id": 3,
+                "name": "score",
+                "type": "int"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 2,
+              "total-records": 2
+            }
+          },
+          {
+            "operation": "append",
+            "ordinal": 1,
+            "parent": 0,
+            "summary": {
+              "added-records": 1,
+              "total-records": 3
+            }
+          }
+        ],
+        "spec-id": "v3_add_column_divergent_defaults"
+      },
+      "yaml": "# Spec — v3 add-column where initial-default != write-default. The sharp case\n# the equal-defaults fixture (v3_schema_evolution_defaults) can't reach: existing\n# rows must read the INITIAL default, while a later append that OMITS the column\n# must get the WRITE default. An impl that conflates the two reads wrong historic\n# data. Authored-golden (minted from iceberg-java, the reference).\n#\n# score: initial-default -1 (backfills rows written before the column existed),\n# write-default 0 (fills the column when a new row omits it). r1/r2 predate the\n# column -\u003e -1; r3 is appended after, omitting score -\u003e 0.\n\nheader:\n  id: v3_add_column_divergent_defaults\n  format-version: 3\n  spec-anchor: \"table-spec#default-values\"\n  table-uuid: \"6a7b8c9d-0e1f-2a3b-4c5d-6e7f80912233\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,   type: int, required: true }\n      - { id: 2, name: name, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !int 1, name: !string \"ann\" }\n      - { __rowkey: r2, id: !int 2, name: !string \"bob\" }\n\n  - op: evolve-schema\n    changes:\n      - kind: add-column\n        field:\n          id: 3\n          name: score\n          type: int\n          initial-default: !int -1     # existing rows (r1, r2) read -1\n          write-default: !int 0        # a new row omitting score gets 0\n\n  - op: append\n    rows:\n      - { __rowkey: r3, id: !int 3, name: !string \"cid\" }   # score omitted -\u003e write-default 0\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, name: ann, score: -1 }   # initial-default backfills existing rows\n          - { id: 2, name: bob, score: -1 }\n          - { id: 3, name: cid, score: 0 }    # write-default fills the omitted column\n"
+    },
+    {
+      "id": "v3_rename_then_add_reused_name",
+      "source": "synthesized",
+      "format_version": 3,
+      "ops": [
+        {
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
+        },
+        {
+          "op": "evolve-schema",
+          "summary": "evolve schema (1 change) → snapshot 1",
+          "detail": [
+            "rename field 3 → c"
+          ]
+        },
+        {
+          "op": "evolve-schema",
+          "summary": "evolve schema (1 change) → snapshot 2",
+          "detail": [
+            "add column d int"
+          ]
+        },
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "write.append",
+        "write.evolve-schema"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 1
+                },
+                "2": {
+                  "type": "string",
+                  "value": "x"
+                },
+                "3": {
+                  "type": "int",
+                  "value": 300
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "int",
+                  "value": 2
+                },
+                "2": {
+                  "type": "string",
+                  "value": "y"
+                },
+                "3": {
+                  "type": "int",
+                  "value": 301
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "a",
+                "type": "int"
+              },
+              {
+                "field-id": 2,
+                "name": "b",
+                "type": "string"
+              },
+              {
+                "field-id": 3,
+                "name": "c",
+                "type": "int"
+              },
+              {
+                "field-id": 4,
+                "name": "d",
+                "type": "int"
+              }
+            ]
+          }
+        ],
+        "snapshots": [
+          {
+            "operation": "append",
+            "ordinal": 0,
+            "parent": null,
+            "summary": {
+              "added-records": 2,
+              "total-records": 2
+            }
+          }
+        ],
+        "spec-id": "v3_rename_then_add_reused_name"
+      },
+      "yaml": "# Spec — reads bind by FIELD-ID, never by name. Write rows under {a, b, d}\n# (ids 1,2,3); rename field-id 3 (d -\u003e c); then add a NEW column also named \"d\"\n# (fresh id 4). Old rows must surface their id-3 value under the renamed name\n# \"c\", and read NULL for the brand-new \"d\" (id 4) — they never had id-4 data.\n# An impl that resolves columns by name (or reuses physical positions) returns\n# the wrong column. Authored-golden (minted from iceberg-java).\n\nheader:\n  id: v3_rename_then_add_reused_name\n  format-version: 3\n  spec-anchor: \"table-spec#column-projection\"\n  table-uuid: \"7b8c9d0e-1f2a-3b4c-5d6e-7f8091223344\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: a, type: int, required: true }\n      - { id: 2, name: b, type: string }\n      - { id: 3, name: d, type: int }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, a: !int 1, b: !string \"x\", d: !int 300 }\n      - { __rowkey: r2, a: !int 2, b: !string \"y\", d: !int 301 }\n\n  # Two SEPARATE commits: a rename and an add-of-the-freed-name cannot share one\n  # updateSchema transaction (the conflict guard validates against the original\n  # schema, where \"d\" still exists). Rename first, commit, then add.\n  - op: evolve-schema\n    changes:\n      - kind: rename-column          # field-id 3: d -\u003e c  (id preserved)\n        field-id: 3\n        to: c\n\n  - op: evolve-schema\n    changes:\n      - kind: add-column             # a brand-new \"d\" (fresh id 4), distinct from old id-3\n        field:\n          id: 4\n          name: d\n          type: int\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          # old id-3 value now reads under \"c\"; the new \"d\" (id 4) is null for old rows\n          - { a: 1, b: x, c: 300, d: null }\n          - { a: 2, b: y, c: 301, d: null }\n"
+    },
+    {
       "id": "v3_schema_evolution_defaults",
       "source": "synthesized",
       "format_version": 3,
@@ -1823,6 +2093,62 @@
     },
     {
       "fixture": "v2_read_append_timetravel",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v3_add_column_divergent_defaults",
+      "runner": "go",
+      "status": "declared-gap",
+      "detail": {
+        "missing": [
+          "write.evolve-schema"
+        ],
+        "stderr": "unsupported: entry 1: unsupported feature \"op.evolve-schema\""
+      }
+    },
+    {
+      "fixture": "v3_add_column_divergent_defaults",
+      "runner": "rust",
+      "status": "declared-gap",
+      "detail": {
+        "missing": [
+          "write.evolve-schema"
+        ],
+        "stderr": "unsupported: entry 1: evolve-schema.promote-type"
+      }
+    },
+    {
+      "fixture": "v3_add_column_divergent_defaults",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v3_rename_then_add_reused_name",
+      "runner": "go",
+      "status": "declared-gap",
+      "detail": {
+        "missing": [
+          "write.evolve-schema"
+        ],
+        "stderr": "unsupported: entry 1: unsupported feature \"op.evolve-schema\""
+      }
+    },
+    {
+      "fixture": "v3_rename_then_add_reused_name",
+      "runner": "rust",
+      "status": "declared-gap",
+      "detail": {
+        "missing": [
+          "write.evolve-schema"
+        ],
+        "stderr": "unsupported: entry 1: evolve-schema.promote-type"
+      }
+    },
+    {
+      "fixture": "v3_rename_then_add_reused_name",
       "runner": "java",
       "status": "pass",
       "detail": {}

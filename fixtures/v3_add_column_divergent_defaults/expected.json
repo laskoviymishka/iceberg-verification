@@ -1,0 +1,93 @@
+{
+  "spec-id" : "v3_add_column_divergent_defaults",
+  "accept" : true,
+  "snapshots" : [ {
+    "ordinal" : 0,
+    "parent" : null,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 2,
+      "added-records" : 2
+    }
+  }, {
+    "ordinal" : 1,
+    "parent" : 0,
+    "operation" : "append",
+    "summary" : {
+      "total-records" : 3,
+      "added-records" : 1
+    }
+  } ],
+  "observations" : [ {
+    "at" : "latest",
+    "iceberg-schema" : [ {
+      "field-id" : 0,
+      "name" : "__rowkey",
+      "type" : "string"
+    }, {
+      "field-id" : 1,
+      "name" : "id",
+      "type" : "int"
+    }, {
+      "field-id" : 2,
+      "name" : "name",
+      "type" : "string"
+    }, {
+      "field-id" : 3,
+      "name" : "score",
+      "type" : "int"
+    } ],
+    "decoded-rows" : [ {
+      "0" : {
+        "type" : "string",
+        "value" : "r3"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 3
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "cid"
+      },
+      "3" : {
+        "type" : "int",
+        "value" : 0
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r1"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 1
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "ann"
+      },
+      "3" : {
+        "type" : "int",
+        "value" : -1
+      }
+    }, {
+      "0" : {
+        "type" : "string",
+        "value" : "r2"
+      },
+      "1" : {
+        "type" : "int",
+        "value" : 2
+      },
+      "2" : {
+        "type" : "string",
+        "value" : "bob"
+      },
+      "3" : {
+        "type" : "int",
+        "value" : -1
+      }
+    } ]
+  } ]
+}

@@ -299,15 +299,20 @@ final class Interpret {
           Map<String, Object> field = (Map<String, Object>) c.get("field");
           String name = str(field.get("name"));
           org.apache.iceberg.types.Type type = SchemaBuilder.resolveType(field.get("type"));
-          Object dv = field.get("initial-default");
-          if (dv == null) {
-            dv = field.get("write-default");
-          }
-          if (dv != null) {
-            // addColumn(name, type, doc, default) sets BOTH initial + write default.
-            update.addColumn(name, type, null, asTyped(dv, name).toIcebergLiteral(type));
-          } else {
+          Object initial = field.get("initial-default");
+          Object write = field.get("write-default");
+          if (initial == null && write == null) {
             update.addColumn(name, type);
+          } else {
+            // addColumn(name, type, doc, default) sets BOTH initial + write default.
+            // The initial default is what existing rows read; when a distinct
+            // write-default is authored, override just that with updateColumnDefault
+            // so existing rows read `initial` while new omitting-rows get `write`.
+            Object both = initial != null ? initial : write;
+            update.addColumn(name, type, null, asTyped(both, name).toIcebergLiteral(type));
+            if (write != null && !write.equals(initial)) {
+              update.updateColumnDefault(name, asTyped(write, name).toIcebergLiteral(type));
+            }
           }
         }
         case "drop-column" -> update.deleteColumn(authoredName(c.get("field-id")));
