@@ -14,6 +14,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch: # allow a clean manual run (a fresh run = attempt 1 = one
+                     # github-pages artifact; `gh run rerun` accumulates artifacts
+                     # across attempts, which deploy-pages@v4 refuses to disambiguate)
 
 permissions:
   contents: read
