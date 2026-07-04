@@ -59,14 +59,14 @@ implementation's runner over the shared corpus and produces a compliance report.
 > `spec/`); a **fixture** is one individual test under `fixtures/` — an op-log
 > (`fixture.yaml`) plus its `expected.json` golden.
 
+- **`v2_append_timetravel`** — two appends + time-travel scans at each snapshot
+  ordinal. Authored golden.
 - **`v2_append_posdelete_timetravel`** — append + merge-on-read position delete +
   time-travel. Authored golden.
-- **`v3_compaction_noop`** — oracle mode: compaction is a logical no-op on the row
-  multiset and folds away pending deletes. No golden, no reference engine.
+- **`v2_read_append_timetravel`** — read side: loads a checked-in table artifact
+  (`source: artifact`), then appends and time-travels over it. Authored golden.
 - **`v3_schema_evolution_defaults`** — type promotion + add-column with defaults +
   time-travel across the change. Authored golden.
-- **`v3_types_transforms`** — wide type surface (primitives, decimal, uuid, fixed,
-  nested struct/list/map) + bucket/truncate partition transforms. Authored golden.
 
 ## Golden format
 
