@@ -1,9 +1,10 @@
-# What iceberg-go claims to support, verified against main (2026-07-03).
-# The orchestrator runs the go runner only over specs whose required features are
-# listed here. A listed feature that then fails = a real failure. An UNLISTED
-# feature a spec needs = exit 4 = a visible "unsupported" matrix cell (declared
-# gap). Removing a gap comment when support lands is what lights up the cell —
-# drift can't hide (protobuf-conformance failure-list discipline).
+# What the iceberg-go RUNNER supports (verified against main, 2026-07-03).
+# IMPORTANT: this declares what the *runner binary* has wired, not everything the
+# iceberg-go library can do. The orchestrator runs the go runner only over specs
+# whose required features are listed here; a listed feature that then exits 4 is a
+# DRIFT failure (undeclared-gap), an UNLISTED feature a spec needs is an honest
+# declared gap. Keeping this in sync with the runner's dispatch is the whole point
+# (protobuf-conformance failure-list discipline).
 #
 # READ vs WRITE are separate axes. A read fixture (source: artifact) needs only
 # supports.read features; a DML/write fixture needs supports.write features.
@@ -18,27 +19,20 @@ supports:
     - types.primitive
     - delete.merge-on-read.position        # scan applies position deletes present in the table
   write:
+    # The runner dispatches append / observe / delete today (interpret.go
+    # applyEntry). rewrite / evolve-schema / evolve-spec / overwrite are NOT wired
+    # in the runner yet — listing them here would overclaim and the orchestrator
+    # would (correctly) flag them as drift.
     - append
-    - delete.copy-on-write
-    - delete.merge-on-read.position
-    - overwrite.copy-on-write
-    - rewrite                              # ReplaceDataFiles / rewrite_data_files
-    - evolve-schema.add-column
-    - evolve-schema.promote-type
-    - evolve-schema.drop-column
-    - evolve-schema.rename-column
-    - evolve-spec
-    - time-travel
-    - defaults                             # initial-default / write-default
-    - row-lineage                          # VERIFY against current v3 support before relying on it
+    - delete.merge-on-read.position        # write.delete.mode=merge-on-read -> Transaction.Delete
+    - time-travel                          # WithSnapshotID
     - types.primitive
-    - types.decimal
-    - types.uuid
-    - types.fixed
-    - types.nested                         # struct/list/map
 
-# DECLARED GAPS (NOT supported today -> exit 4 -> empty matrix cell):
+# DECLARED GAPS (runner exits 4 -> honest "unsupported" matrix cell):
+#   write.delete.copy-on-write                 # dispatch exists but corpus/runner path unproven
 #   write.delete.merge-on-read.equality        # Transaction.Delete writes position deletes only
 #   write.delete.merge-on-read.deletion-vector # MoR writes position deletes, not DVs
-#   write.types.variant.write                  # read covered (PR #1238); write support unconfirmed
-#   write.types.geometry / write.types.geography  # v3 geo, unconfirmed
+#   write.rewrite                              # op.rewrite not wired in the runner (Phase 5)
+#   write.evolve-schema.* / write.evolve-spec  # not wired in the runner (Phase 3)
+#   write.overwrite.copy-on-write              # not wired in the runner
+#   types.decimal / uuid / fixed / nested      # Phase 4 (nested arrow build/decode)

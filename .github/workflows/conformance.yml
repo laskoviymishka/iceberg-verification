@@ -1,0 +1,133 @@
+# Licensed to the Apache Software Foundation (ASF) under the Apache License 2.0.
+#
+# Build every runner, run the orchestrator over the fixture corpus, publish the
+# conformance matrix (report.json + the SPA) to GitHub Pages.
+#
+# Note: on GitHub-hosted runners the public registries (crates.io, Maven Central,
+# the Go module proxy) are reachable directly — the local dev environment's
+# registry-proxy configs (runners/rust/.cargo, runners/java/gradle.properties)
+# are gitignored and intentionally NOT used here.
+
+name: conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: runners/go/go.sum
+      - name: build go runner
+        working-directory: runners/go
+        run: go build -o runner .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-go
+          path: runners/go/runner
+
+  build-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runners/rust
+      - name: build rust runner
+        working-directory: runners/rust
+        run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-rust
+          path: runners/rust/target/release/runner
+
+  build-java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: build java runner
+        working-directory: runners/java
+        run: ./gradlew --no-daemon installDist
+      - name: stage java runtime image
+        run: |
+          mkdir -p dist/java
+          cp -r runners/java/build/install/iceberg-verification-runner/* dist/java/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-java
+          path: dist/java
+
+  orchestrate:
+    needs: [build-go, build-rust, build-java]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4 # java runner launcher needs a JRE at runtime
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/download-artifact@v4
+        with:
+          name: runner-go
+          path: bin/go
+      - uses: actions/download-artifact@v4
+        with:
+          name: runner-rust
+          path: bin/rust
+      - uses: actions/download-artifact@v4
+        with:
+          name: runner-java
+          path: bin/java
+      - name: make runners executable
+        run: |
+          chmod +x bin/go/runner bin/rust/runner
+          chmod +x bin/java/bin/iceberg-verification-runner
+      - name: run orchestrator
+        run: |
+          python3 orchestrator/run.py --corpus . --out site/report.json \
+            --runner go=bin/go/runner \
+            --runner rust=bin/rust/runner \
+            --runner java=bin/java/bin/iceberg-verification-runner
+      - name: show matrix summary
+        run: python3 -c "import json;r=json.load(open('site/report.json'));c={}; [c.__setitem__(x['status'],c.get(x['status'],0)+1) for x in r['cells']];print('matrix:',c)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report
+          path: site
+
+  deploy-pages:
+    needs: orchestrate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: conformance-report
+          path: site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

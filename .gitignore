@@ -19,3 +19,8 @@
 warehouse/
 # generated reports
 /report/
+# orchestrator python cache
+__pycache__/
+*.pyc
+# CI scratch (downloaded runner binaries / staged java image)
+/dist/

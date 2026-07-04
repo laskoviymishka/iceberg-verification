@@ -1,0 +1,60 @@
+<!doctype html>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements. Licensed under the Apache License 2.0.
+-->
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Iceberg Conformance Matrix</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <div class="masthead-row">
+        <div class="wordmark">
+          <span class="wordmark-glyph" aria-hidden="true">◈</span>
+          <div>
+            <h1>Iceberg&nbsp;Conformance</h1>
+            <p class="tagline">cross-implementation DML &amp; read matrix</p>
+          </div>
+        </div>
+        <div class="masthead-meta">
+          <button id="theme-toggle" class="theme-toggle" title="toggle theme" aria-label="toggle theme">☾</button>
+          <div class="meta-block">
+            <span class="meta-label">generated</span>
+            <span id="generated-at" class="meta-value">—</span>
+          </div>
+        </div>
+      </div>
+      <div id="legend" class="legend"></div>
+    </header>
+
+    <main>
+      <section id="matrix-view">
+        <div id="summary" class="summary"></div>
+        <div class="matrix-scroll">
+          <table id="matrix" class="matrix"></table>
+        </div>
+      </section>
+
+      <section id="fixture-view" hidden></section>
+    </main>
+
+    <footer class="colophon">
+      <span>emit-only runners · one comparator · golden = logical form, not bytes</span>
+      <span id="counts"></span>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
