@@ -38,9 +38,16 @@ type Header struct {
 	FormatVersion int               `yaml:"format-version"`
 	SpecAnchor    string            `yaml:"spec-anchor"`
 	TableUUID     string            `yaml:"table-uuid"`
+	Source        string            `yaml:"source"` // "synthesized" (default) | "artifact"
+	Artifact      *LArtifact        `yaml:"artifact"`
 	Schema        LSchema           `yaml:"schema"`
 	PartitionSpec *LPartitionSpec   `yaml:"partition-spec"`
 	Properties    map[string]string `yaml:"properties"`
+}
+
+// LArtifact locates a checked-in table for read (source: artifact) mode.
+type LArtifact struct {
+	Path string `yaml:"path"` // fixture-relative dir holding bytes/ + bytes/ROOT
 }
 
 // LSchema is the op-log schema block: an ordered list of fields.

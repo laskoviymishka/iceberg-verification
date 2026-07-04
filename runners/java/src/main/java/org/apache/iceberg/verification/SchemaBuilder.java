@@ -70,6 +70,25 @@ final class SchemaBuilder {
     return ids;
   }
 
+  /**
+   * Derive canonical output field-ids from a loaded (read mode) table schema by top-level
+   * column POSITION: __rowkey => 0, then user columns 1,2,... in schema order. Read fixtures
+   * carry no authored ids and the impl's internal ids differ, so position is the stable
+   * canonical labeling shared across implementations.
+   */
+  static Map<String, Integer> canonicalIdsFromSchema(Schema schema) {
+    Map<String, Integer> ids = new LinkedHashMap<>();
+    int next = 1;
+    for (Types.NestedField f : schema.columns()) {
+      if (f.name().equals(ROW_KEY_NAME)) {
+        ids.put(f.name(), 0);
+      } else {
+        ids.put(f.name(), next++);
+      }
+    }
+    return ids;
+  }
+
   @SuppressWarnings("unchecked")
   private static Types.NestedField buildField(Map<String, Object> def) {
     int id = ((Number) def.get("id")).intValue();

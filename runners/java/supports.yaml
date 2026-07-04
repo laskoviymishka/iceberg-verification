@@ -1,25 +1,34 @@
 # What iceberg-java claims to support, verified against 1.11.0.
 # The orchestrator runs the java runner only over specs whose required features
-# are listed here. A listed feature that then fails = a real failure. An
-# UNLISTED feature a spec needs = exit 4 = a visible "unsupported" matrix cell
-# (declared gap). Java is the reference implementation — it supports the full
-# DML surface; this file tracks what the RUNNER has wired so far.
+# are listed here. A listed feature that then fails = a real failure. An UNLISTED
+# feature a spec needs = exit 4 = a visible "unsupported" matrix cell (declared
+# gap). Java is the reference implementation — it supports the full DML surface;
+# this file tracks what the RUNNER has wired so far.
+#
+# READ vs WRITE are separate axes. A read fixture (source: artifact) needs only
+# supports.read features; a DML/write fixture needs supports.write features.
 
 implementation: iceberg-java
 version: 1.11.0
 
 supports:
-  - append
-  - delete.merge-on-read.position       # PositionDeleteWriter + newRowDelta (positions self-computed)
-  - time-travel                         # IcebergGenerics.read(table).useSnapshot(id)
-  - types.primitive                     # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
+  read:
+    - artifact                            # load a checked-in table (StaticTableOperations + BaseTable)
+    - time-travel                         # IcebergGenerics.read(table).useSnapshot(id)
+    - types.primitive
+    - delete.merge-on-read.position       # scan applies position deletes present in the table
+  write:
+    - append
+    - delete.merge-on-read.position       # PositionDeleteWriter + newRowDelta (positions self-computed)
+    - time-travel
+    - types.primitive                     # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
 
 # NOT YET WIRED IN THE RUNNER (iceberg-java supports these in pure core; runner phases beyond 0-2):
-#   evolve-schema.promote-type          # UpdateSchema.updateColumn (Phase 3)
-#   evolve-schema.add-column (+default) # UpdateSchema.addColumn(name,type,doc,Literal) (Phase 3)
-#   rewrite                             # table.newRewrite() (Phase 5)
-#   delete.copy-on-write                # newDelete().deleteFromRowFilter (whole-file)
-#   delete.merge-on-read.deletion-vector# BaseDVFileWriter / Deletes.writeDVs (v3)
+#   write.evolve-schema.promote-type      # UpdateSchema.updateColumn (Phase 3)
+#   write.evolve-schema.add-column (+default)
+#   write.rewrite                         # table.newRewrite() (Phase 5)
+#   write.delete.copy-on-write            # newDelete().deleteFromRowFilter (whole-file)
+#   write.delete.merge-on-read.deletion-vector  # BaseDVFileWriter (v3); the 1.11 pin lacks nextRowId etc.
 #   types.decimal / uuid / fixed / nested + partition transforms (Phase 4)
 #
 # Because Java is the reference, its output on the shared fixtures is the ground

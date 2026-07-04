@@ -70,6 +70,24 @@ pub fn build_canon_ids(ls: &LSchema) -> HashMap<String, i32> {
     m
 }
 
+/// Derive canonical output field-ids from a loaded (read mode) table schema by
+/// top-level column POSITION: __rowkey => 0, then user columns 1,2,... in schema
+/// order. Read fixtures carry no authored ids and the impl's internal ids differ,
+/// so position is the stable canonical labeling shared across implementations.
+pub fn canon_ids_from_schema(schema: &Schema) -> HashMap<String, i32> {
+    let mut m = HashMap::new();
+    let mut next = 1;
+    for f in schema.as_struct().fields() {
+        if f.name == ROW_KEY_NAME {
+            m.insert(f.name.clone(), 0);
+        } else {
+            m.insert(f.name.clone(), next);
+            next += 1;
+        }
+    }
+    m
+}
+
 fn build_field(f: &LField) -> Result<NestedField> {
     let ty = resolve_type(&f.field_type)?;
     let mut nf = if f.required {

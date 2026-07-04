@@ -19,18 +19,34 @@
 
     "header": {
       "type": "object",
-      "required": ["format-version", "seeds", "schema"],
+      "required": ["format-version"],
       "additionalProperties": false,
-      "description": "Determinism contract + initial table definition. The seeds pin everything a writer would otherwise randomize, so a golden is reproducible.",
+      "description": "Table origin + (for synthesized tables) the determinism contract and initial definition. 'source' selects how the table under observation comes to exist: 'synthesized' (default) builds it from this header + the op-log's mutating entries (write conformance); 'artifact' loads a pre-existing checked-in table (read conformance). The observe/emit half is identical either way.",
       "properties": {
         "id": { "type": "string", "description": "Stable spec id, e.g. v2_append_posdelete_timetravel" },
         "format-version": { "type": "integer", "enum": [1, 2, 3] },
         "spec-anchor": { "type": "string", "description": "L0 anchor: the spec clause this spec exercises" },
         "table-uuid": { "type": "string", "description": "Pinned; writers randomize this otherwise" },
+        "source": {
+          "type": "string",
+          "enum": ["synthesized", "artifact"],
+          "default": "synthesized",
+          "description": "synthesized: build the table from seeds+schema and the mutating entries (write conformance). artifact: load a checked-in table from bytes and only observe it (read conformance)."
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Present iff source=artifact. Locates the checked-in table bytes; the runner materializes them and loads the table read-only.",
+          "required": ["path"],
+          "properties": {
+            "path": { "type": "string", "description": "fixture-relative dir holding bytes/ (the checked-in warehouse) + a bytes/ROOT marker naming the pinned absolute root the metadata was minted at" }
+          }
+        },
         "seeds": {
           "type": "object",
           "additionalProperties": false,
           "required": ["snapshot-id", "commit-ts"],
+          "description": "Required for source=synthesized. Pins everything a writer would otherwise randomize, so a golden is reproducible.",
           "properties": {
             "snapshot-id": { "const": "sequential", "description": "snapshot-ids assigned 0,1,2... in commit order; canonicalizer renumbers references to match" },
             "commit-ts": { "type": ["string", "integer"], "description": "fixed base commit timestamp" },
@@ -41,7 +57,14 @@
         "partition-spec": { "$ref": "#/$defs/partitionSpec" },
         "sort-order": { "$ref": "#/$defs/sortOrder" },
         "properties": { "type": "object", "additionalProperties": { "type": "string" } }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "const": "artifact" } }, "required": ["source"] },
+          "then": { "required": ["artifact"] },
+          "else": { "required": ["seeds", "schema"] }
+        }
+      ]
     },
 
     "schema": {

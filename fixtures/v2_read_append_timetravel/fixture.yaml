@@ -1,0 +1,30 @@
+# Read-conformance fixture — load a checked-in v2 table and observe it.
+#
+# source: artifact means the runner does NOT build the table from an op-log; it
+# materializes the checked-in bytes/ (restoring them to the pinned root named in
+# bytes/ROOT) and loads the table read-only, then runs the observe entries. This
+# is the read side of the same contract: the observe -> decode -> canonical-emit
+# half is identical to the write (synthesized) fixtures.
+#
+# The bytes/ tree was minted by running fixtures/v2_append_timetravel through the
+# DML runner into the pinned root — so this fixture and its write sibling share a
+# golden's row-state, demonstrating that write-conformance mints read-conformance.
+
+header:
+  id: v2_read_append_timetravel
+  format-version: 2
+  spec-anchor: "table-spec#snapshots"
+  source: artifact
+  artifact:
+    path: .        # bytes/ lives alongside this fixture.yaml
+
+entries:
+  # read the current table state (the two appends of the sibling write fixture)
+  - op: observe
+    at: latest
+    expect:
+      scan:
+        rows:
+          - { id: 1, category: a }
+          - { id: 2, category: b }
+          - { id: 3, category: a }

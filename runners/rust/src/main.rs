@@ -36,11 +36,12 @@ mod arrow_decode;
 mod emit;
 mod interpret;
 mod llog;
+mod materialize;
 mod schema;
 mod values;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -97,7 +98,7 @@ async fn main() -> ExitCode {
         }
     };
 
-    match run(catalog, &log, &args.out).await {
+    match run(catalog, &log, &args.spec, &args.out).await {
         Ok(()) => ExitCode::from(EXIT_OK),
         Err(RunError::Unsupported { entry, feature }) => {
             eprintln!("unsupported: entry {entry}: {feature}");
@@ -110,8 +111,12 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run(catalog: SqlCatalog, log: &LLog, out: &PathBuf) -> Result<(), RunError> {
-    let mut runner = Runner::materialize(catalog, log).await?;
+async fn run(catalog: SqlCatalog, log: &LLog, spec: &Path, out: &PathBuf) -> Result<(), RunError> {
+    let spec_dir = spec
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let mut runner = Runner::new(catalog, log, spec_dir).await?;
     runner.run(log).await?;
     let output = runner.into_output();
     write_output(out, &output).map_err(RunError::Other)?;

@@ -20,10 +20,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog"
+	iceio "github.com/apache/iceberg-go/io"
 	icetable "github.com/apache/iceberg-go/table"
 )
 
@@ -40,10 +42,11 @@ func (e *unsupportedError) Error() string {
 
 // runner executes an L-log against iceberg-go and accumulates canonical output.
 type runner struct {
-	ctx   context.Context
-	cat   catalog.Catalog
-	ident icetable.Identifier
-	tbl   *icetable.Table
+	ctx      context.Context
+	cat      catalog.Catalog
+	ident    icetable.Identifier
+	tbl      *icetable.Table
+	specPath string // path to the l-log file (to resolve fixture-relative artifact dirs)
 
 	schema   *iceberg.Schema
 	canonIDs map[string]int // column name -> canonical output field-id (__rowkey => 0)
@@ -60,21 +63,28 @@ type runner struct {
 	out *CanonicalOutput
 }
 
-// execute runs the full op-log: materialize the table from the header, then
-// process each entry in order, assembling canonical output.
+// execute acquires the table (synthesized from the header, or loaded from a
+// checked-in artifact) then processes each entry in order, assembling canonical
+// output.
 func (r *runner) execute(log *LLog) error {
-	sc, _, err := buildSchema(log.Header.Schema)
-	if err != nil {
-		return fmt.Errorf("build schema: %w", err)
-	}
-	r.schema = sc
-	r.canonIDs = buildCanonIDs(log.Header.Schema)
 	r.snapshotOrdinal = map[int64]int{}
 	r.binds = map[string]int64{}
 	r.out = &CanonicalOutput{SpecID: log.Header.ID, Accept: true}
 
-	if err := r.createTable(log.Header); err != nil {
-		return fmt.Errorf("create table: %w", err)
+	if log.Header.Source == "artifact" {
+		if err := r.loadArtifact(log.Header); err != nil {
+			return fmt.Errorf("load artifact: %w", err)
+		}
+	} else {
+		sc, _, err := buildSchema(log.Header.Schema)
+		if err != nil {
+			return fmt.Errorf("build schema: %w", err)
+		}
+		r.schema = sc
+		r.canonIDs = buildCanonIDs(log.Header.Schema)
+		if err := r.createTable(log.Header); err != nil {
+			return fmt.Errorf("create table: %w", err)
+		}
 	}
 
 	for i, e := range log.Entries {
@@ -82,6 +92,32 @@ func (r *runner) execute(log *LLog) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// loadArtifact materializes a checked-in table (restoring its bytes to the
+// pinned root so embedded absolute paths resolve) and loads it read-only. The
+// canonical field-ids are derived by name from the loaded schema; __rowkey => 0
+// and user columns keep the field-id the table carries (same relabel rule the
+// synthesized path uses).
+func (r *runner) loadArtifact(h Header) error {
+	if h.Artifact == nil {
+		return fmt.Errorf("source: artifact requires an 'artifact' block")
+	}
+	fixtureDir := filepath.Join(filepath.Dir(r.specPath), h.Artifact.Path)
+	metaPath, err := materialize(fixtureDir)
+	if err != nil {
+		return err
+	}
+	tbl, err := icetable.NewFromLocation(
+		r.ctx, icetable.Identifier{"default", "t"}, metaPath,
+		iceio.LoadFSFunc(nil, metaPath), nil,
+	)
+	if err != nil {
+		return fmt.Errorf("NewFromLocation %s: %w", metaPath, err)
+	}
+	r.tbl = tbl
+	r.canonIDs = canonIDsFromSchema(tbl.Schema())
 	return nil
 }
 

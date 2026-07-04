@@ -80,7 +80,8 @@ public final class Runner {
     }
 
     try {
-      Interpret interp = new Interpret(catalog, TableIdentifier.of("default", "t"));
+      Interpret interp =
+          new Interpret(catalog, TableIdentifier.of("default", "t"), Paths.get(specPath));
       Emit out = interp.run(log);
       writeOutput(Paths.get(outPath), out);
       return EXIT_OK;

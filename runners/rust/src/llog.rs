@@ -42,11 +42,26 @@ pub struct Header {
     pub id: String,
     #[serde(rename = "format-version", default)]
     pub format_version: i32,
-    pub schema: LSchema,
+    /// "synthesized" (default) builds the table from schema+entries; "artifact"
+    /// loads a checked-in table read-only (read conformance).
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub artifact: Option<LArtifact>,
+    /// Required for source=synthesized; absent for read fixtures.
+    #[serde(default)]
+    pub schema: Option<LSchema>,
     #[serde(rename = "partition-spec", default)]
     pub partition_spec: Option<YamlValue>,
     #[serde(default)]
     pub properties: std::collections::HashMap<String, String>,
+}
+
+/// Locates a checked-in table for read (source: artifact) mode.
+#[derive(Debug, Deserialize)]
+pub struct LArtifact {
+    /// Fixture-relative dir holding bytes/ + bytes/ROOT.
+    pub path: String,
 }
 
 /// The op-log schema block: an ordered list of fields.

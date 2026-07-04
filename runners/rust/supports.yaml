@@ -4,28 +4,35 @@
 # UNLISTED feature a spec needs = exit 4 = a visible "unsupported" matrix cell
 # (declared gap). Removing a gap comment when support lands is what lights up
 # the cell — drift can't hide (protobuf-conformance failure-list discipline).
+#
+# READ vs WRITE are separate axes. A read fixture (source: artifact) needs only
+# supports.read features; a DML/write fixture needs supports.write features.
+# They genuinely differ: iceberg-rust APPLIES position deletes on scan but has
+# no committable API to WRITE them — so read.delete.merge-on-read.position is
+# supported while write.delete.merge-on-read.position is a gap.
 
 implementation: iceberg-rust
 version: HEAD      # replace with the pinned commit sha at PR time
 
 supports:
-  - append
-  - time-travel                          # scan().snapshot_id(id), arbitrary historical
-  - types.primitive                      # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
+  read:
+    - artifact                             # load a checked-in table (StaticTable::from_metadata_file)
+    - time-travel                          # scan().snapshot_id(id), arbitrary historical
+    - types.primitive                      # boolean/int/long/float/double/string (runner: Phase 0-2 subset)
+    - delete.merge-on-read.position        # a scan APPLIES position deletes already present in the table
+  write:
+    - append
+    - time-travel
 
-# DECLARED GAPS (NOT supported by iceberg-rust today -> exit 4 -> empty matrix cell):
-#   delete.copy-on-write                 # no delete/overwrite transaction action
-#   delete.merge-on-read.position        # no position-delete writer; fast_append rejects non-Data files
-#   delete.merge-on-read.equality        # equality-delete writer exists on disk but is not committable
-#   delete.merge-on-read.deletion-vector # absent
-#   overwrite.copy-on-write              # no overwrite action
-#   rewrite                              # no compaction / rewrite_data_files action
-#   evolve-schema.promote-type           # UpdateSchemaAction supports add/delete column only
-#   evolve-spec                          # no partition-spec evolution action
+# DECLARED GAPS (exit 4):
+#   write.delete.copy-on-write             # no delete/overwrite transaction action
+#   write.delete.merge-on-read.position    # no position-delete writer; fast_append rejects non-Data files
+#   write.delete.merge-on-read.equality    # equality-delete writer exists on disk but is not committable
+#   write.delete.merge-on-read.deletion-vector
+#   write.overwrite.copy-on-write
+#   write.rewrite                          # no compaction / rewrite_data_files action
+#   write.evolve-schema.promote-type       # UpdateSchemaAction supports add/delete column only
+#   write.evolve-spec
 #
 # NOT YET WIRED IN THE RUNNER (iceberg-rust supports these; runner Phase 4 work, not a spec gap):
-#   types.decimal / types.uuid / types.fixed / types.nested (struct/list/map)
-#   partition transforms (bucket/truncate)
-#
-# READ-ONLY capability iceberg-rust HAS but the op-log can't exercise (can't write
-# the deletes to read back): applying position deletes on scan.
+#   types.decimal / uuid / fixed / nested (struct/list/map), partition transforms

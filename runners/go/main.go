@@ -94,9 +94,10 @@ func run() int {
 	}
 
 	r := &runner{
-		ctx:   ctx,
-		cat:   cat,
-		ident: icetable.Identifier{"default", "t"},
+		ctx:      ctx,
+		cat:      cat,
+		ident:    icetable.Identifier{"default", "t"},
+		specPath: specPath,
 	}
 	if err := r.execute(log); err != nil {
 		var unsup *unsupportedError

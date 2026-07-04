@@ -25,10 +25,14 @@
 
 use std::collections::HashMap;
 
+use std::path::{Path, PathBuf};
+
 use anyhow::{Result, anyhow, bail};
 use arrow_array::RecordBatch;
 use futures::TryStreamExt;
+use iceberg::io::FileIO;
 use iceberg::spec::{DataFileFormat, FormatVersion};
+use iceberg::table::StaticTable;
 use iceberg::transaction::{ApplyTransactionAction, Transaction};
 use iceberg::writer::base_writer::data_file_writer::DataFileWriterBuilder;
 use iceberg::writer::file_writer::ParquetWriterBuilder;
@@ -37,7 +41,7 @@ use iceberg::writer::file_writer::location_generator::{
 };
 use iceberg::writer::file_writer::rolling_writer::RollingFileWriterBuilder;
 use iceberg::writer::{IcebergWriter, IcebergWriterBuilder};
-use iceberg::{Catalog, NamespaceIdent, TableCreation};
+use iceberg::{Catalog, NamespaceIdent, TableCreation, TableIdent};
 use iceberg_catalog_sql::SqlCatalog;
 use parquet::file::properties::WriterProperties;
 use serde_yaml::Value as YamlValue;
@@ -45,8 +49,9 @@ use serde_yaml::Value as YamlValue;
 use crate::arrow_build::{Row, build_record_batch};
 use crate::arrow_decode::decode_scan;
 use crate::emit::{CanonicalOutput, Observation, SnapshotOut, SummaryOut};
-use crate::llog::{Entry, LLog};
-use crate::schema::{ROW_KEY_NAME, build_canon_ids, build_schema};
+use crate::llog::{Entry, Header, LLog};
+use crate::materialize::materialize;
+use crate::schema::{ROW_KEY_NAME, build_canon_ids, build_schema, canon_ids_from_schema};
 use crate::values::TypedValue;
 
 /// An error carrying its category so main can map it to the right exit code.
@@ -83,7 +88,8 @@ enum At {
 }
 
 pub struct Runner {
-    catalog: SqlCatalog,
+    /// None in read (source: artifact) mode, which never commits.
+    catalog: Option<SqlCatalog>,
     table: iceberg::table::Table,
     canon_ids: HashMap<String, i32>,
     /// iceberg snapshot-id -> commit ordinal (0,1,2...).
@@ -95,10 +101,42 @@ pub struct Runner {
 }
 
 impl Runner {
-    /// Create the namespace + table from the header, returning a ready Runner.
-    pub async fn materialize(catalog: SqlCatalog, log: &LLog) -> Result<Runner, RunError> {
-        let schema = build_schema(&log.header.schema)?;
-        let canon_ids = build_canon_ids(&log.header.schema);
+    /// Acquire the table — synthesized from the header, or loaded from a
+    /// checked-in artifact — and return a ready Runner. `spec_dir` is the
+    /// directory of the l-log file, used to resolve fixture-relative artifacts.
+    pub async fn new(
+        catalog: SqlCatalog,
+        log: &LLog,
+        spec_dir: PathBuf,
+    ) -> Result<Runner, RunError> {
+        let mut out = CanonicalOutput {
+            spec_id: log.header.id.clone(),
+            accept: true,
+            snapshots: Vec::new(),
+            observations: Vec::new(),
+        };
+
+        if log.header.source.as_deref() == Some("artifact") {
+            let (table, canon_ids) = Self::load_artifact(&log.header, &spec_dir).await?;
+            out.spec_id = log.header.id.clone();
+            return Ok(Runner {
+                catalog: None,
+                table,
+                canon_ids,
+                snapshot_ordinal: HashMap::new(),
+                next_ordinal: 0,
+                binds: HashMap::new(),
+                out,
+            });
+        }
+
+        let ls = log
+            .header
+            .schema
+            .as_ref()
+            .ok_or_else(|| RunError::Other(anyhow!("source: synthesized requires a schema")))?;
+        let schema = build_schema(ls)?;
+        let canon_ids = build_canon_ids(ls);
 
         let ns = NamespaceIdent::new("default".to_string());
         catalog
@@ -124,19 +162,38 @@ impl Runner {
             .map_err(|e| RunError::Other(anyhow!("create table: {e}")))?;
 
         Ok(Runner {
-            catalog,
+            catalog: Some(catalog),
             table,
             canon_ids,
             snapshot_ordinal: HashMap::new(),
             next_ordinal: 0,
             binds: HashMap::new(),
-            out: CanonicalOutput {
-                spec_id: log.header.id.clone(),
-                accept: true,
-                snapshots: Vec::new(),
-                observations: Vec::new(),
-            },
+            out,
         })
+    }
+
+    /// Materialize a checked-in table (restoring its bytes to the pinned root so
+    /// embedded absolute paths resolve) and load it read-only via StaticTable.
+    /// Canonical field-ids are derived by column position (__rowkey => 0).
+    async fn load_artifact(
+        h: &Header,
+        spec_dir: &Path,
+    ) -> Result<(iceberg::table::Table, HashMap<String, i32>), RunError> {
+        let artifact = h.artifact.as_ref().ok_or_else(|| {
+            RunError::Other(anyhow!("source: artifact requires an 'artifact' block"))
+        })?;
+        let fixture_dir = spec_dir.join(&artifact.path);
+        let meta_path = materialize(&fixture_dir).map_err(RunError::Other)?;
+
+        let file_io = FileIO::new_with_fs();
+        let ident = TableIdent::from_strs(["default", "t"])
+            .map_err(|e| RunError::Other(anyhow!("ident: {e}")))?;
+        let static_tbl = StaticTable::from_metadata_file(&meta_path, ident, file_io)
+            .await
+            .map_err(|e| RunError::Other(anyhow!("StaticTable load {meta_path}: {e}")))?;
+        let table = static_tbl.into_table();
+        let canon_ids = canon_ids_from_schema(table.metadata().current_schema());
+        Ok((table, canon_ids))
     }
 
     pub async fn run(&mut self, log: &LLog) -> Result<(), RunError> {
@@ -199,6 +256,9 @@ impl Runner {
             .await
             .map_err(|err| RunError::Other(err.context(format!("entry {idx} write"))))?;
 
+        let catalog = self.catalog.as_ref().ok_or_else(|| {
+            RunError::Other(anyhow!("entry {idx} append: no catalog in read mode"))
+        })?;
         let tx = Transaction::new(&self.table);
         let tx = tx
             .fast_append()
@@ -206,7 +266,7 @@ impl Runner {
             .apply(tx)
             .map_err(|e| RunError::Other(anyhow!("entry {idx} fast_append: {e}")))?;
         self.table = tx
-            .commit(&self.catalog)
+            .commit(catalog)
             .await
             .map_err(|e| RunError::Other(anyhow!("entry {idx} commit: {e}")))?;
 

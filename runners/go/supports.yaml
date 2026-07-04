@@ -4,32 +4,41 @@
 # feature a spec needs = exit 4 = a visible "unsupported" matrix cell (declared
 # gap). Removing a gap comment when support lands is what lights up the cell —
 # drift can't hide (protobuf-conformance failure-list discipline).
+#
+# READ vs WRITE are separate axes. A read fixture (source: artifact) needs only
+# supports.read features; a DML/write fixture needs supports.write features.
 
 implementation: iceberg-go
 version: main@2026-07-03      # replace with the pinned commit sha at PR time
 
 supports:
-  - append
-  - delete.copy-on-write
-  - delete.merge-on-read.position
-  - overwrite.copy-on-write
-  - rewrite                              # ReplaceDataFiles / rewrite_data_files
-  - evolve-schema.add-column
-  - evolve-schema.promote-type
-  - evolve-schema.drop-column
-  - evolve-schema.rename-column
-  - evolve-spec
-  - time-travel
-  - defaults                             # initial-default / write-default
-  - row-lineage                          # VERIFY against current v3 support before relying on it
-  - types.primitive
-  - types.decimal
-  - types.uuid
-  - types.fixed
-  - types.nested                         # struct/list/map
+  read:
+    - artifact                             # load a checked-in table (table.NewFromLocation)
+    - time-travel
+    - types.primitive
+    - delete.merge-on-read.position        # scan applies position deletes present in the table
+  write:
+    - append
+    - delete.copy-on-write
+    - delete.merge-on-read.position
+    - overwrite.copy-on-write
+    - rewrite                              # ReplaceDataFiles / rewrite_data_files
+    - evolve-schema.add-column
+    - evolve-schema.promote-type
+    - evolve-schema.drop-column
+    - evolve-schema.rename-column
+    - evolve-spec
+    - time-travel
+    - defaults                             # initial-default / write-default
+    - row-lineage                          # VERIFY against current v3 support before relying on it
+    - types.primitive
+    - types.decimal
+    - types.uuid
+    - types.fixed
+    - types.nested                         # struct/list/map
 
 # DECLARED GAPS (NOT supported today -> exit 4 -> empty matrix cell):
-#   delete.merge-on-read.equality        # Transaction.Delete writes position deletes only
-#   delete.merge-on-read.deletion-vector # MoR writes position deletes, not DVs
-#   types.variant.write                  # read covered (PR #1238); write support unconfirmed
-#   types.geometry / types.geography     # v3 geo, unconfirmed
+#   write.delete.merge-on-read.equality        # Transaction.Delete writes position deletes only
+#   write.delete.merge-on-read.deletion-vector # MoR writes position deletes, not DVs
+#   write.types.variant.write                  # read covered (PR #1238); write support unconfirmed
+#   write.types.geometry / write.types.geography  # v3 geo, unconfirmed

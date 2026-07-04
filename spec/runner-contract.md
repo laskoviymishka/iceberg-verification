@@ -20,7 +20,9 @@ runner --spec <l-log.json> --warehouse <dir> --out <canonical.json>
 
 The runner:
 1. Parse + schema-validate the L-log. On invalid spec → exit `2`.
-2. Create the table from `header` (schema, partition-spec, sort-order, format-version, pinned uuid/seeds, properties).
+2. Acquire the table under observation, per `header.source`:
+   - `synthesized` (default) — **create** the table from `header` (schema, partition-spec, sort-order, format-version, pinned uuid/seeds, properties), then apply the op-log's mutating entries. This is **write conformance**.
+   - `artifact` — **load** a pre-existing checked-in table (read conformance). The runner materializes `header.artifact.path`'s `bytes/` (restoring them to the pinned root in `bytes/ROOT`, so the metadata's embedded absolute paths resolve) and loads the table read-only; there are no mutating entries. The `acquire → observe → emit` back half is identical to synthesized mode.
 3. For each `entry` in order:
    - mutating op → translate to native API, commit one snapshot. Map spec-open choices to the impl (iceberg-go: `strategy` → `write.delete.mode` table property before `Delete`).
    - `observe` → scan at `at`, capture canonical state, tag with `bind` if present.
@@ -28,6 +30,8 @@ The runner:
 4. Assemble canonical output (below) and write to `--out`. Exit `0`.
 
 The runner writes canonical output whether or not the L-log carries `expect`/`invariant` — those are for the orchestrator, not the runner. The runner records the observed state at every `observe` and the per-snapshot physical facts the canonical schema asks for; it asserts nothing.
+
+In `artifact` (read) mode the runner emits **observations only** — no `snapshots` section. The loaded table's snapshot history is an artifact of how the fixture was written, not a read-conformance fact; a read case collapses to exactly the PR #2 shape (observations of the decoded row-set). The `snapshots` section is the write-side (DML) extension, emitted only in `synthesized` mode.
 
 ## Exit codes
 

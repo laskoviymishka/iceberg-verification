@@ -23,13 +23,16 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.AppendFiles;
+import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.SnapshotSummary;
+import org.apache.iceberg.StaticTableOperations;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.Namespace;
@@ -40,8 +43,10 @@ import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.IcebergGenerics;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.encryption.EncryptionUtil;
+import org.apache.iceberg.hadoop.HadoopFileIO;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.DataWriter;
+import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.types.Types;
 
@@ -68,6 +73,7 @@ final class Interpret {
 
   private final Catalog catalog;
   private final TableIdentifier ident;
+  private final java.nio.file.Path specPath;
   private Table table;
   private Schema schema;
   private Map<String, Integer> canonIds;
@@ -81,22 +87,46 @@ final class Interpret {
 
   private final Emit out = new Emit();
 
-  Interpret(Catalog catalog, TableIdentifier ident) {
+  Interpret(Catalog catalog, TableIdentifier ident, java.nio.file.Path specPath) {
     this.catalog = catalog;
     this.ident = ident;
+    this.specPath = specPath;
   }
 
   Emit run(LLog log) throws IOException {
-    this.schema = SchemaBuilder.build(header(log));
-    this.canonIds = SchemaBuilder.canonicalIds(header(log));
     out.specId = str(log.header.get("id"));
 
-    createTable(log);
+    if ("artifact".equals(log.header.get("source"))) {
+      loadArtifact(log);
+    } else {
+      this.schema = SchemaBuilder.build(header(log));
+      this.canonIds = SchemaBuilder.canonicalIds(header(log));
+      createTable(log);
+    }
 
     for (int i = 0; i < log.entries.size(); i++) {
       applyEntry(i, log.entries.get(i));
     }
     return out;
+  }
+
+  /**
+   * Materialize a checked-in table (restoring its bytes to the pinned root so the
+   * embedded absolute paths resolve) and load it read-only via StaticTableOperations.
+   * Canonical field-ids are derived by column position (__rowkey => 0).
+   */
+  @SuppressWarnings("unchecked")
+  private void loadArtifact(LLog log) throws IOException {
+    Map<String, Object> artifact = (Map<String, Object>) log.header.get("artifact");
+    if (artifact == null || artifact.get("path") == null) {
+      throw new IllegalArgumentException("source: artifact requires an 'artifact.path'");
+    }
+    java.nio.file.Path fixtureDir = specPath.getParent().resolve((String) artifact.get("path"));
+    String metaPath = Materialize.materialize(fixtureDir);
+
+    FileIO io = new HadoopFileIO(new Configuration());
+    this.table = new BaseTable(new StaticTableOperations(metaPath, io), "read_fixture");
+    this.canonIds = SchemaBuilder.canonicalIdsFromSchema(table.schema());
   }
 
   @SuppressWarnings("unchecked")

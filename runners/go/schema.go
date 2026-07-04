@@ -56,6 +56,25 @@ func buildCanonIDs(ls LSchema) map[string]int {
 	return m
 }
 
+// canonIDsFromSchema derives canonical output field-ids from a loaded (read
+// mode) table schema by top-level column POSITION: __rowkey => 0, then user
+// columns 1,2,... in schema order. Read fixtures carry no authored ids, and the
+// impl's internal ids differ (iceberg-go reassigns them at mint), so position is
+// the stable canonical labeling shared across implementations.
+func canonIDsFromSchema(sc *iceberg.Schema) map[string]int {
+	m := map[string]int{}
+	next := 1
+	for _, f := range sc.Fields() {
+		if f.Name == rowKeyName {
+			m[f.Name] = 0
+			continue
+		}
+		m[f.Name] = next
+		next++
+	}
+	return m
+}
+
 // buildSchema turns the L-log schema block into an iceberg.Schema, prepending
 // the synthetic __rowkey string column. Returns the schema and the ordered
 // list of user field names (schema order) for row materialization.
