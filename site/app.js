@@ -27,7 +27,10 @@ let REPORT = null;
 
 async function boot() {
   try {
-    const res = await fetch("report.json");
+    // GitHub Pages serves report.json with a fixed max-age=600 we can't override,
+    // so defeat the browser cache explicitly: the matrix must reflect the latest
+    // deploy immediately, not up to 10 minutes later.
+    const res = await fetch(`report.json?t=${Date.now()}`, { cache: "no-store" });
     REPORT = await res.json();
   } catch (e) {
     document.querySelector("main").innerHTML =

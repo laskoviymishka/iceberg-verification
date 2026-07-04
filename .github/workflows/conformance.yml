@@ -136,6 +136,8 @@ jobs:
         with:
           name: conformance-report
           path: site
+      - name: stamp build id (cache-bust css/js)
+        run: sed -i "s/__BUILD__/${GITHUB_SHA}/g" site/index.html
       - uses: actions/configure-pages@v5
         with:
           enablement: true # self-provision the Pages site (repo has none yet)
