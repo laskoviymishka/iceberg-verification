@@ -71,21 +71,43 @@ function renderSummary() {
   document.getElementById("summary").innerHTML = tiles.join("");
 }
 
+// axis groups fixtures by format-version then read/write, so the matrix reads
+// "v2 → write → fixture 1 / 2 / 3" rather than one flat alphabetical list.
+function groupKey(fx) {
+  const v = "v" + (fx.format_version ?? "?");
+  const axis = fx.source === "artifact" ? "read" : "write";
+  return { v, axis, label: `${v} · ${axis}` };
+}
+
 function renderMatrix() {
   const runners = REPORT.runners;
+  const ncol = runners.length + 1;
   let head = `<thead><tr><th>fixture</th>`;
   for (const r of runners)
     head += `<th class="runner-col"><span class="runner-name">${r.name}</span><span class="runner-ver">${r.version || ""}</span></th>`;
   head += `</tr></thead>`;
 
+  // stable grouping: sort by (version, axis, id), then emit a group header row
+  // whenever the (version, axis) pair changes.
+  const fixtures = [...REPORT.fixtures].sort((a, b) => {
+    const ga = groupKey(a),
+      gb = groupKey(b);
+    return (ga.v + ga.axis + a.id).localeCompare(gb.v + gb.axis + b.id);
+  });
+
   let body = "<tbody>";
-  for (const fx of REPORT.fixtures) {
+  let lastGroup = null;
+  for (const fx of fixtures) {
+    const g = groupKey(fx);
+    if (g.label !== lastGroup) {
+      body += `<tr class="group-row"><td class="group-cell" colspan="${ncol}">
+        <span class="group-badge grp-${g.axis}">${g.axis}</span>
+        <span class="group-ver">format ${g.v}</span>
+      </td></tr>`;
+      lastGroup = g.label;
+    }
     body += `<tr>`;
-    const tags = [
-      fx.source === "artifact" ? "read" : "write",
-      "v" + (fx.format_version ?? "?"),
-      fx.has_golden ? "golden" : "oracle",
-    ];
+    const tags = [fx.has_golden ? "golden" : "oracle"];
     body += `<td class="fixture-cell" onclick="location.hash='#/fixture/${fx.id}'">
       <div class="fixture-id">${fx.id}</div>
       <div class="fixture-tags">${tags.map((t) => `<span class="fx-tag">${t}</span>`).join("")}</div>
@@ -95,7 +117,7 @@ function renderMatrix() {
       const s = STATUS[c.status] || STATUS.error;
       body += `<td class="cell">
         <button class="${s.cls}" onclick="location.hash='#/fixture/${fx.id}'" title="${c.status}">
-          <span class="dot" style="background:currentColor"></span>
+          <span class="dot"></span>
           <span class="cell-status">${s.label}</span>
         </button>
       </td>`;
@@ -138,7 +160,7 @@ function renderFixture(fx) {
     `<span class="badge">${fx.has_golden ? "authored golden" : "oracle mode"}</span>`,
   ].join("");
 
-  const timeline = fx.ops.map(opNode).join("");
+  const timeline = fx.ops.map((op, i) => opNode(op, i)).join("");
 
   const results = REPORT.runners
     .map((r) => {
@@ -165,10 +187,15 @@ function renderFixture(fx) {
       <h2>${fx.id}</h2>
       <div class="badges">${badges}</div>
     </div>
+
+    <div class="panel panel-hero oplog">
+      <h3>operation log — what the runner replays</h3>
+      <ol class="timeline">${timeline}</ol>
+    </div>
+
     <div class="detail-grid">
       <div>
-        <div class="panel"><h3>operation log</h3><ul class="timeline">${timeline}</ul></div>
-        <div class="panel" style="margin-top:28px"><h3>results</h3><div class="results">${results}</div></div>
+        <div class="panel"><h3>results</h3><div class="results">${results}</div></div>
       </div>
       <div>${golden}
         <div class="panel" style="margin-top:28px"><h3>fixture source (l-log)</h3><pre class="code">${esc(fx.yaml)}</pre></div>
@@ -176,21 +203,22 @@ function renderFixture(fx) {
     </div>`;
 }
 
-function opNode(op) {
+function opNode(op, i) {
   const mutating = ["append", "delete", "overwrite", "rewrite", "evolve-schema", "evolve-spec"];
   const isMut = mutating.includes(op.op);
   const cls = isMut ? "mut" : op.op === "observe" ? "obs" : "";
   const glyph = isMut ? "◆" : op.op === "observe" ? "◎" : "·";
-  let detail = "";
-  if (op.op === "observe") {
-    detail = `read at <code>${op.at || "latest"}</code>` + (op.bind ? ` · bind <code>${op.bind}</code>` : "");
-  } else if (op.op === "delete") {
-    detail = `<code>${op.strategy || "merge-on-read"}</code> · <code>${op.kind || "position"}</code>`;
-  }
+  // headline: prefer the orchestrator-computed summary; fall back to raw op name.
+  const summary = op.summary || op.op;
+  const detail = (op.detail || [])
+    .map((d) => `<div class="op-detail">${esc(d)}</div>`)
+    .join("");
   return `<li class="op ${cls}">
     <span class="op-node">${glyph}</span>
+    <div class="op-step">step ${i + 1}</div>
     <div class="op-name">${op.op}</div>
-    ${detail ? `<div class="op-detail">${detail}</div>` : ""}
+    <div class="op-summary">${esc(summary)}</div>
+    ${detail}
   </li>`;
 }
 

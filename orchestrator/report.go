@@ -51,13 +51,17 @@ type Fixture struct {
 	YAML          string   `json:"yaml"`
 }
 
-// Op is a light per-entry summary for the timeline view.
+// Op is a per-entry summary for the timeline view. Summary is a human-readable
+// headline (e.g. "delete where id = 2"); Detail carries supporting bullet lines
+// (predicate mode, schema changes, appended row keys).
 type Op struct {
-	Op       string `json:"op"`
-	At       string `json:"at,omitempty"`
-	Bind     string `json:"bind,omitempty"`
-	Strategy string `json:"strategy,omitempty"`
-	Kind     string `json:"kind,omitempty"`
+	Op       string   `json:"op"`
+	At       string   `json:"at,omitempty"`
+	Bind     string   `json:"bind,omitempty"`
+	Strategy string   `json:"strategy,omitempty"`
+	Kind     string   `json:"kind,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
+	Detail   []string `json:"detail,omitempty"`
 }
 
 // Cell is one (fixture × runner) result.

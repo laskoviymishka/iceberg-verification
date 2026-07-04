@@ -1,6 +1,6 @@
 {
   "schema": "iceberg-verification/report/v1",
-  "generated_at": "2026-07-04T17:26:17Z",
+  "generated_at": "2026-07-04T17:47:46Z",
   "runners": [
     {
       "name": "go",
@@ -64,26 +64,43 @@
       "format_version": 2,
       "ops": [
         {
-          "op": "append"
+          "op": "append",
+          "summary": "append 3 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2, r3"
+          ]
         },
         {
           "op": "observe",
           "at": "latest",
-          "bind": "after-append"
+          "bind": "after-append",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"after-append\""
+          ]
         },
         {
           "op": "delete",
           "strategy": "merge-on-read",
-          "kind": "position"
+          "kind": "position",
+          "summary": "delete where id = 2 → snapshot 1",
+          "detail": [
+            "merge-on-read · position delete"
+          ]
         },
         {
           "op": "observe",
           "at": "latest",
-          "bind": "after-delete"
+          "bind": "after-delete",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"after-delete\""
+          ]
         },
         {
           "op": "observe",
-          "at": "after-append"
+          "at": "after-append",
+          "summary": "observe · time-travel to after-append"
         }
       ],
       "required": [
@@ -313,24 +330,41 @@
       "format_version": 2,
       "ops": [
         {
-          "op": "append"
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
         },
         {
           "op": "observe",
           "at": "latest",
-          "bind": "after-first"
+          "bind": "after-first",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"after-first\""
+          ]
         },
         {
-          "op": "append"
+          "op": "append",
+          "summary": "append 1 row → snapshot 1",
+          "detail": [
+            "rows r3"
+          ]
         },
         {
           "op": "observe",
           "at": "latest",
-          "bind": "after-second"
+          "bind": "after-second",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"after-second\""
+          ]
         },
         {
           "op": "observe",
-          "at": "after-first"
+          "at": "after-first",
+          "summary": "observe · time-travel to after-first"
         }
       ],
       "required": [
@@ -540,7 +574,8 @@
       "ops": [
         {
           "op": "observe",
-          "at": "latest"
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
         }
       ],
       "required": [
@@ -627,26 +662,45 @@
       "format_version": 3,
       "ops": [
         {
-          "op": "append"
+          "op": "append",
+          "summary": "append 2 rows → snapshot 0",
+          "detail": [
+            "rows r1, r2"
+          ]
         },
         {
           "op": "observe",
           "at": "latest",
-          "bind": "v1"
+          "bind": "v1",
+          "summary": "observe · read at the latest snapshot",
+          "detail": [
+            "bind this snapshot as \"v1\""
+          ]
         },
         {
-          "op": "evolve-schema"
+          "op": "evolve-schema",
+          "summary": "evolve schema (2 changes) → snapshot 1",
+          "detail": [
+            "promote field 1 → long",
+            "add column score long default 0"
+          ]
         },
         {
-          "op": "append"
+          "op": "append",
+          "summary": "append 1 row → snapshot 2",
+          "detail": [
+            "rows r3"
+          ]
         },
         {
           "op": "observe",
-          "at": "latest"
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
         },
         {
           "op": "observe",
-          "at": "v1"
+          "at": "v1",
+          "summary": "observe · time-travel to v1"
         }
       ],
       "required": [

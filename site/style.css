@@ -14,7 +14,7 @@
 
   --pass: #35c46b;
   --fail: #ff5a5a;
-  --gap: #ffb038;
+  --gap: #8a9a92;   /* declared gap = N/A, not alarming: neutral grey */
   --drift: #ff7ad9;
   --oracle: #4fb6ff;
   --reject: #9a8cff;
@@ -215,7 +215,7 @@ main { padding: 32px clamp(16px, 4vw, 56px) 64px; max-width: 1400px; }
 .runner-ver { display: block; font-size: 9px; color: var(--ink-faint); letter-spacing: 0.06em; text-transform: none; margin-top: 2px; }
 
 .fixture-cell {
-  padding: 14px 16px;
+  padding: 16px 22px;
   cursor: pointer;
   background: var(--bg-cell);
   transition: background 0.15s;
@@ -223,6 +223,25 @@ main { padding: 32px clamp(16px, 4vw, 56px) 64px; max-width: 1400px; }
 }
 .fixture-cell:hover { background: var(--bg-raise); }
 .fixture-id { font-weight: 500; color: var(--ink); }
+
+/* group header row: "write · format v2" band spanning the table width */
+.group-row td { border-right: none; }
+.group-cell {
+  padding: 12px 22px 10px;
+  background: color-mix(in oklab, var(--accent) 5%, var(--bg-raise));
+  border-bottom: 1px solid var(--line-bright) !important;
+}
+.group-badge {
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  font-weight: 700; padding: 2px 9px; border-radius: 3px; margin-right: 12px;
+  border: 1px solid currentColor;
+}
+.grp-write { color: var(--accent); }
+.grp-read { color: var(--oracle); }
+.group-ver {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-dim);
+}
 .fixture-tags { display: flex; gap: 6px; margin-top: 5px; }
 .fx-tag {
   font-size: 9px;
@@ -257,6 +276,7 @@ main { padding: 32px clamp(16px, 4vw, 56px) 64px; max-width: 1400px; }
 .cell:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
 .dot {
   width: 13px; height: 13px; border-radius: 50%;
+  background: currentColor;
   box-shadow: 0 0 10px color-mix(in oklab, currentColor 60%, transparent);
 }
 .cell-status {
@@ -266,7 +286,8 @@ main { padding: 32px clamp(16px, 4vw, 56px) 64px; max-width: 1400px; }
   color: var(--ink-dim);
 }
 
-/* status colors */
+/* status colors — .cell button uses `all: unset`, which zeroes `color`, so
+   these must out-specify it: qualify with .cell button (specificity 0,2,1). */
 .s-pass   { color: var(--pass); }
 .s-fail   { color: var(--fail); }
 .s-declared-gap { color: var(--gap); }
@@ -275,6 +296,23 @@ main { padding: 32px clamp(16px, 4vw, 56px) 64px; max-width: 1400px; }
 .s-reject { color: var(--reject); }
 .s-error  { color: var(--error); }
 .s-bad-fixture { color: var(--neutral); }
+
+.cell button.s-pass   { color: var(--pass); }
+.cell button.s-fail   { color: var(--fail); }
+.cell button.s-declared-gap   { color: var(--gap); }
+.cell button.s-undeclared-gap { color: var(--drift); }
+.cell button.s-oracle { color: var(--oracle); }
+.cell button.s-reject { color: var(--reject); }
+.cell button.s-error  { color: var(--error); }
+.cell button.s-bad-fixture { color: var(--neutral); }
+
+/* the status label under the dot inherits the ink-dim tone by default; give it a
+   faint wash of the status hue so pass/gap/error read at a glance. */
+.cell button.s-pass .cell-status { color: color-mix(in oklab, var(--pass) 70%, var(--ink-dim)); }
+.cell button.s-declared-gap .cell-status { color: color-mix(in oklab, var(--gap) 80%, var(--ink-dim)); }
+.cell button.s-error .cell-status,
+.cell button.s-fail .cell-status { color: color-mix(in oklab, var(--fail) 70%, var(--ink-dim)); }
+.cell button.s-undeclared-gap .cell-status { color: color-mix(in oklab, var(--drift) 70%, var(--ink-dim)); }
 
 /* ---- fixture detail view ---- */
 #fixture-view { animation: rise 0.4s ease both; }
@@ -318,26 +356,51 @@ main { padding: 32px clamp(16px, 4vw, 56px) 64px; max-width: 1400px; }
   color: var(--ink-faint); margin: 0 0 14px; font-weight: 700;
 }
 
+/* hero panel — the op-log is the story of the fixture, so it leads full-width */
+.panel-hero {
+  background: var(--bg-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 24px 28px;
+  margin-bottom: 28px;
+}
+.panel-hero.oplog { border-left: 3px solid var(--accent); }
+
 /* op timeline */
 .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
 .timeline::before {
-  content: ""; position: absolute; left: 15px; top: 6px; bottom: 6px;
+  content: ""; position: absolute; left: 15px; top: 8px; bottom: 8px;
   width: 2px; background: var(--line-bright);
 }
 .op {
-  position: relative; padding: 0 0 20px 44px; min-height: 32px;
+  position: relative; padding: 0 0 22px 48px; min-height: 34px;
 }
 .op:last-child { padding-bottom: 0; }
 .op-node {
-  position: absolute; left: 6px; top: 2px;
-  width: 20px; height: 20px; border-radius: 50%;
+  position: absolute; left: 5px; top: 0;
+  width: 22px; height: 22px; border-radius: 50%;
   background: var(--bg); border: 2px solid var(--line-bright);
   display: grid; place-items: center; font-size: 10px; color: var(--ink-dim);
+  z-index: 1;
 }
 .op.mut .op-node { border-color: var(--accent); color: var(--accent); }
 .op.obs .op-node { border-color: var(--oracle); color: var(--oracle); }
-.op-name { font-weight: 700; color: var(--ink); }
-.op-detail { color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
+.op-step {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 1px;
+}
+.op-name {
+  display: inline-block; font-weight: 700; font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-dim); margin-bottom: 3px;
+}
+.op.mut .op-name { color: var(--accent); }
+.op.obs .op-name { color: var(--oracle); }
+.op-summary { color: var(--ink); font-size: 14px; font-weight: 500; }
+.op-detail {
+  color: var(--ink-dim); font-size: 12.5px; margin-top: 3px;
+  padding-left: 12px; border-left: 1px solid var(--line);
+}
 .op-detail code { color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, transparent); padding: 0 4px; border-radius: 2px; }
 
 /* runner results strip */
