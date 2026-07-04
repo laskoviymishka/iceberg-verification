@@ -1,0 +1,27 @@
+# Read-conformance fixture — decimal / uuid / fixed / binary type surface.
+#
+# source: artifact — the runner materializes the checked-in bytes/ (a v2 table
+# minted from seed.yaml via iceberg-java) and scans it read-only. Exercises the
+# DECODE half for the representational types where writers most easily diverge:
+# decimal scale, uuid case, binary/fixed hex encoding. Null rows pin present-vs-null.
+#
+# Golden minted by tools/mint.py from seed.yaml; renderings are iceberg-java's
+# (the reference): decimal as exact plain string, uuid lowercase-hyphenated,
+# fixed/binary as lowercase hex. See seed.yaml for the write op-log.
+#
+# SURFACED DIVERGENCE (intentional red cell for iceberg-rust): the FIXED type's
+# schema-name. Spec + iceberg-java render it "fixed[4]"; iceberg-rust's
+# Type::to_string renders "fixed(4)". The VALUE agrees (deadbeef); only the
+# type-name string differs. decimal(9, 2) (with a space) agrees across all three.
+
+header:
+  id: v2_types_decimal_uuid_binary_read
+  format-version: 2
+  spec-anchor: "table-spec#primitive-types"
+  source: artifact
+  artifact:
+    path: .        # bytes/ lives alongside this fixture.yaml
+
+entries:
+  - op: observe
+    at: latest

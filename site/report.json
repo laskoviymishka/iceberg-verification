@@ -1,6 +1,6 @@
 {
   "schema": "iceberg-verification/report/v1",
-  "generated_at": "2026-07-04T18:50:41Z",
+  "generated_at": "2026-07-04T19:19:33Z",
   "runners": [
     {
       "name": "go",
@@ -1389,7 +1389,7 @@
         ],
         "spec-id": "v2_delete_all_rows"
       },
-      "yaml": "# Spec — v2 merge-on-read delete of ALL rows (predicate always-true). The edge\n# case: a delete that empties the table. The scan must return zero rows, and the\n# delete snapshot still records a delete file. Authored-golden (minted from\n# iceberg-java). Pins that a whole-table MoR delete is expressible and that the\n# emptied scan is [] (not an error).\n\nheader:\n  id: v2_delete_all_rows\n  format-version: 2\n  spec-anchor: \"table-spec#row-level-deletes\"\n  table-uuid: \"0e1f2a3b-4c5d-6e7f-8091-223344556677\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: long,   required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !long 1, val: !string \"a\" }\n      - { __rowkey: r2, id: !long 2, val: !string \"b\" }\n\n  - op: delete\n    strategy: merge-on-read\n    kind: position\n    predicate:\n      type: \"true\"     # quoted: the always-true predicate tag is the string \"true\", not a YAML boolean\n    expect:\n      snapshot: { operation: delete }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows: []\n"
+      "yaml": "# Spec — v2 merge-on-read delete of ALL rows (predicate always-true). The edge\n# case: a delete that empties the table. Authored-golden (minted from\n# iceberg-java). Pins that the emptied scan is [] (not an error).\n#\n# SURFACED DIVERGENCE (intentional red cell for iceberg-go): when a MoR delete\n# matches EVERY row, the two writers disagree on the snapshot summary —\n#   iceberg-java: writes a positional delete file over the retained data;\n#                 total-records: 2 (physical data records unchanged),\n#                 total-delete-files: 1.\n#   iceberg-go:   shortcuts the whole-table delete to a DATA-FILE REMOVAL (no\n#                 delete file); total-records: 0, deleted-records: 2.\n# Same logical result (empty table); different physical strategy + metadata. A\n# reader keying on total-delete-files sees different things. Golden follows the\n# Java reference; iceberg-go fails this cell until the behavior is reconciled.\n\nheader:\n  id: v2_delete_all_rows\n  format-version: 2\n  spec-anchor: \"table-spec#row-level-deletes\"\n  table-uuid: \"0e1f2a3b-4c5d-6e7f-8091-223344556677\"\n  seeds:\n    snapshot-id: sequential\n    commit-ts: \"2026-01-01T00:00:00Z\"\n    file-paths: templated\n  schema:\n    fields:\n      - { id: 1, name: id,  type: long,   required: true }\n      - { id: 2, name: val, type: string }\n\nentries:\n  - op: append\n    rows:\n      - { __rowkey: r1, id: !long 1, val: !string \"a\" }\n      - { __rowkey: r2, id: !long 2, val: !string \"b\" }\n\n  - op: delete\n    strategy: merge-on-read\n    kind: position\n    predicate:\n      type: \"true\"     # quoted: the always-true predicate tag is the string \"true\", not a YAML boolean\n    expect:\n      snapshot: { operation: delete }\n\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows: []\n"
     },
     {
       "id": "v2_delete_in_predicate",
@@ -2141,6 +2141,207 @@
         "spec-id": "v2_read_append_timetravel"
       },
       "yaml": "# Read-conformance fixture — load a checked-in v2 table and observe it.\n#\n# source: artifact means the runner does NOT build the table from an op-log; it\n# materializes the checked-in bytes/ (restoring them to the pinned root named in\n# bytes/ROOT) and loads the table read-only, then runs the observe entries. This\n# is the read side of the same contract: the observe -\u003e decode -\u003e canonical-emit\n# half is identical to the write (synthesized) fixtures.\n#\n# The bytes/ tree was minted by running fixtures/v2_append_timetravel through the\n# DML runner into the pinned root — so this fixture and its write sibling share a\n# golden's row-state, demonstrating that write-conformance mints read-conformance.\n\nheader:\n  id: v2_read_append_timetravel\n  format-version: 2\n  spec-anchor: \"table-spec#snapshots\"\n  source: artifact\n  artifact:\n    path: .        # bytes/ lives alongside this fixture.yaml\n\nentries:\n  # read the current table state (the two appends of the sibling write fixture)\n  - op: observe\n    at: latest\n    expect:\n      scan:\n        rows:\n          - { id: 1, category: a }\n          - { id: 2, category: b }\n          - { id: 3, category: a }\n"
+    },
+    {
+      "id": "v2_types_decimal_uuid_binary_read",
+      "source": "artifact",
+      "format_version": 2,
+      "ops": [
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "read.artifact"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "decimal(9, 2)",
+                  "value": "12.34"
+                },
+                "3": {
+                  "type": "decimal(38, 10)",
+                  "value": "1234567890.0123456789"
+                },
+                "4": {
+                  "type": "uuid",
+                  "value": "12345678-1234-1234-1234-123456789abc"
+                },
+                "5": {
+                  "type": "fixed[4]",
+                  "value": "deadbeef"
+                },
+                "6": {
+                  "type": "binary",
+                  "value": "0102ff"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "dec_s",
+                "type": "decimal(9, 2)"
+              },
+              {
+                "field-id": 3,
+                "name": "dec_w",
+                "type": "decimal(38, 10)"
+              },
+              {
+                "field-id": 4,
+                "name": "u",
+                "type": "uuid"
+              },
+              {
+                "field-id": 5,
+                "name": "fx",
+                "type": "fixed[4]"
+              },
+              {
+                "field-id": 6,
+                "name": "bin",
+                "type": "binary"
+              }
+            ]
+          }
+        ],
+        "spec-id": "v2_types_decimal_uuid_binary_read"
+      },
+      "yaml": "# Read-conformance fixture — decimal / uuid / fixed / binary type surface.\n#\n# source: artifact — the runner materializes the checked-in bytes/ (a v2 table\n# minted from seed.yaml via iceberg-java) and scans it read-only. Exercises the\n# DECODE half for the representational types where writers most easily diverge:\n# decimal scale, uuid case, binary/fixed hex encoding. Null rows pin present-vs-null.\n#\n# Golden minted by tools/mint.py from seed.yaml; renderings are iceberg-java's\n# (the reference): decimal as exact plain string, uuid lowercase-hyphenated,\n# fixed/binary as lowercase hex. See seed.yaml for the write op-log.\n#\n# SURFACED DIVERGENCE (intentional red cell for iceberg-rust): the FIXED type's\n# schema-name. Spec + iceberg-java render it \"fixed[4]\"; iceberg-rust's\n# Type::to_string renders \"fixed(4)\". The VALUE agrees (deadbeef); only the\n# type-name string differs. decimal(9, 2) (with a space) agrees across all three.\n\nheader:\n  id: v2_types_decimal_uuid_binary_read\n  format-version: 2\n  spec-anchor: \"table-spec#primitive-types\"\n  source: artifact\n  artifact:\n    path: .        # bytes/ lives alongside this fixture.yaml\n\nentries:\n  - op: observe\n    at: latest\n"
+    },
+    {
+      "id": "v2_types_temporal_read",
+      "source": "artifact",
+      "format_version": 2,
+      "ops": [
+        {
+          "op": "observe",
+          "at": "latest",
+          "summary": "observe · read at the latest snapshot"
+        }
+      ],
+      "required": [
+        "read.artifact"
+      ],
+      "has_golden": true,
+      "golden": {
+        "accept": true,
+        "observations": [
+          {
+            "at": "latest",
+            "decoded-rows": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "date",
+                  "value": "2026-01-15"
+                },
+                "3": {
+                  "type": "time",
+                  "value": "12:30:45"
+                },
+                "4": {
+                  "type": "timestamp",
+                  "value": "2026-01-15T12:30:45"
+                },
+                "5": {
+                  "type": "timestamptz",
+                  "value": "2026-01-15T12:30:45Z"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                }
+              }
+            ],
+            "iceberg-schema": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "d",
+                "type": "date"
+              },
+              {
+                "field-id": 3,
+                "name": "t",
+                "type": "time"
+              },
+              {
+                "field-id": 4,
+                "name": "ts",
+                "type": "timestamp"
+              },
+              {
+                "field-id": 5,
+                "name": "tstz",
+                "type": "timestamptz"
+              }
+            ]
+          }
+        ],
+        "spec-id": "v2_types_temporal_read"
+      },
+      "yaml": "# Read-conformance fixture — temporal type surface (date/time/timestamp/timestamptz).\n#\n# source: artifact — the runner materializes the checked-in bytes/ (a v2 table\n# minted from seed.yaml via iceberg-java) and scans it read-only. This exercises\n# the DECODE half of the contract for temporal types: an implementation must read\n# each stored value back into the canonical ISO-8601 form. Null rows pin the\n# present-vs-null distinction per column.\n#\n# Golden minted by tools/mint.py from seed.yaml; the golden's ISO renderings are\n# iceberg-java's (the reference). See seed.yaml for the write op-log.\n\nheader:\n  id: v2_types_temporal_read\n  format-version: 2\n  spec-anchor: \"table-spec#primitive-types\"\n  source: artifact\n  artifact:\n    path: .        # bytes/ lives alongside this fixture.yaml\n\nentries:\n  - op: observe\n    at: latest\n"
     },
     {
       "id": "v3_add_column_divergent_defaults",
@@ -2987,6 +3188,209 @@
     },
     {
       "fixture": "v2_read_append_timetravel",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v2_types_decimal_uuid_binary_read",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v2_types_decimal_uuid_binary_read",
+      "runner": "rust",
+      "status": "fail",
+      "detail": {
+        "diffs": [
+          {
+            "path": "observations[0].iceberg-schema",
+            "got": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "dec_s",
+                "type": "decimal(9, 2)"
+              },
+              {
+                "field-id": 3,
+                "name": "dec_w",
+                "type": "decimal(38, 10)"
+              },
+              {
+                "field-id": 4,
+                "name": "u",
+                "type": "uuid"
+              },
+              {
+                "field-id": 5,
+                "name": "fx",
+                "type": "fixed(4)"
+              },
+              {
+                "field-id": 6,
+                "name": "bin",
+                "type": "binary"
+              }
+            ],
+            "want": [
+              {
+                "field-id": 0,
+                "name": "__rowkey",
+                "type": "string"
+              },
+              {
+                "field-id": 1,
+                "name": "id",
+                "type": "long"
+              },
+              {
+                "field-id": 2,
+                "name": "dec_s",
+                "type": "decimal(9, 2)"
+              },
+              {
+                "field-id": 3,
+                "name": "dec_w",
+                "type": "decimal(38, 10)"
+              },
+              {
+                "field-id": 4,
+                "name": "u",
+                "type": "uuid"
+              },
+              {
+                "field-id": 5,
+                "name": "fx",
+                "type": "fixed[4]"
+              },
+              {
+                "field-id": 6,
+                "name": "bin",
+                "type": "binary"
+              }
+            ]
+          },
+          {
+            "path": "observations[0].decoded-rows",
+            "got": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "decimal(9, 2)",
+                  "value": "12.34"
+                },
+                "3": {
+                  "type": "decimal(38, 10)",
+                  "value": "1234567890.0123456789"
+                },
+                "4": {
+                  "type": "uuid",
+                  "value": "12345678-1234-1234-1234-123456789abc"
+                },
+                "5": {
+                  "type": "fixed(4)",
+                  "value": "deadbeef"
+                },
+                "6": {
+                  "type": "binary",
+                  "value": "0102ff"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                }
+              }
+            ],
+            "want": [
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r1"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "1"
+                },
+                "2": {
+                  "type": "decimal(9, 2)",
+                  "value": "12.34"
+                },
+                "3": {
+                  "type": "decimal(38, 10)",
+                  "value": "1234567890.0123456789"
+                },
+                "4": {
+                  "type": "uuid",
+                  "value": "12345678-1234-1234-1234-123456789abc"
+                },
+                "5": {
+                  "type": "fixed[4]",
+                  "value": "deadbeef"
+                },
+                "6": {
+                  "type": "binary",
+                  "value": "0102ff"
+                }
+              },
+              {
+                "0": {
+                  "type": "string",
+                  "value": "r2"
+                },
+                "1": {
+                  "type": "long",
+                  "value": "2"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fixture": "v2_types_decimal_uuid_binary_read",
+      "runner": "java",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v2_types_temporal_read",
+      "runner": "go",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v2_types_temporal_read",
+      "runner": "rust",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "fixture": "v2_types_temporal_read",
       "runner": "java",
       "status": "pass",
       "detail": {}

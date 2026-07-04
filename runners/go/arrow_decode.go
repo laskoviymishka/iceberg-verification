@@ -20,9 +20,11 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
+	"github.com/apache/arrow-go/v18/arrow/extensions"
 	"github.com/apache/iceberg-go"
 )
 
@@ -122,6 +124,60 @@ func decodeCell(arr arrow.Array, i int, typ iceberg.Type) (*valueNode, error) {
 		return &valueNode{Type: name, Value: a.Value(i)}, nil
 	case *array.LargeString:
 		return &valueNode{Type: name, Value: a.Value(i)}, nil
+	case *array.Date32:
+		// ISO date, matching the java reference (LocalDate.toString): YYYY-MM-DD.
+		return &valueNode{Type: name, Value: a.Value(i).ToTime().Format("2006-01-02")}, nil
+	case *array.Time64:
+		unit := a.DataType().(*arrow.Time64Type).Unit
+		return &valueNode{Type: name, Value: formatTime(a.Value(i).ToTime(unit))}, nil
+	case *array.Timestamp:
+		tt := a.DataType().(*arrow.TimestampType)
+		return &valueNode{Type: name, Value: formatTimestamp(a.Value(i).ToTime(tt.Unit), tt.TimeZone != "")}, nil
+	case *array.Decimal128:
+		// exact string with the type's scale, matching BigDecimal.toPlainString.
+		scale := a.DataType().(*arrow.Decimal128Type).Scale
+		return &valueNode{Type: name, Value: a.Value(i).ToString(scale)}, nil
+	case *array.FixedSizeBinary:
+		// uuid and fixed both surface as fixed-size binary; emit lowercase hex.
+		return &valueNode{Type: name, Value: hexEncode(a.Value(i))}, nil
+	case *array.Binary:
+		return &valueNode{Type: name, Value: hexEncode(a.Value(i))}, nil
+	case *extensions.UUIDArray:
+		// iceberg uuid may surface as the arrow UUID extension: emit canonical string.
+		return &valueNode{Type: name, Value: a.Value(i).String()}, nil
 	}
 	return nil, fmt.Errorf("unsupported arrow type %s for iceberg type %s (Phase 4)", arr.DataType(), name)
+}
+
+// formatTime renders a time value as HH:MM:SS, appending a fractional part only
+// when non-zero, matching java's LocalTime.toString.
+func formatTime(t time.Time) string {
+	if t.Nanosecond() == 0 {
+		return t.Format("15:04:05")
+	}
+	return t.Format("15:04:05.999999999")
+}
+
+// formatTimestamp renders a timestamp as ISO-8601 matching the java reference:
+// LocalDateTime for no-tz (no suffix), OffsetDateTime for tz (UTC -> "Z").
+func formatTimestamp(t time.Time, withTZ bool) string {
+	base := "2006-01-02T15:04:05"
+	if t.Nanosecond() != 0 {
+		base = "2006-01-02T15:04:05.999999999"
+	}
+	if withTZ {
+		return t.UTC().Format(base) + "Z"
+	}
+	return t.Format(base)
+}
+
+// hexEncode renders bytes as lowercase hex with no prefix (matches the java hex()).
+func hexEncode(b []byte) string {
+	const digits = "0123456789abcdef"
+	out := make([]byte, len(b)*2)
+	for i, x := range b {
+		out[i*2] = digits[x>>4]
+		out[i*2+1] = digits[x&0xf]
+	}
+	return string(out)
 }

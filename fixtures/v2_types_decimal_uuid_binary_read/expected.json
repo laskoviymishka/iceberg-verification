@@ -1,0 +1,88 @@
+{
+  "spec-id": "v2_types_decimal_uuid_binary_read",
+  "accept": true,
+  "observations": [
+    {
+      "at": "latest",
+      "iceberg-schema": [
+        {
+          "field-id": 0,
+          "name": "__rowkey",
+          "type": "string"
+        },
+        {
+          "field-id": 1,
+          "name": "id",
+          "type": "long"
+        },
+        {
+          "field-id": 2,
+          "name": "dec_s",
+          "type": "decimal(9, 2)"
+        },
+        {
+          "field-id": 3,
+          "name": "dec_w",
+          "type": "decimal(38, 10)"
+        },
+        {
+          "field-id": 4,
+          "name": "u",
+          "type": "uuid"
+        },
+        {
+          "field-id": 5,
+          "name": "fx",
+          "type": "fixed[4]"
+        },
+        {
+          "field-id": 6,
+          "name": "bin",
+          "type": "binary"
+        }
+      ],
+      "decoded-rows": [
+        {
+          "0": {
+            "type": "string",
+            "value": "r1"
+          },
+          "1": {
+            "type": "long",
+            "value": "1"
+          },
+          "2": {
+            "type": "decimal(9, 2)",
+            "value": "12.34"
+          },
+          "3": {
+            "type": "decimal(38, 10)",
+            "value": "1234567890.0123456789"
+          },
+          "4": {
+            "type": "uuid",
+            "value": "12345678-1234-1234-1234-123456789abc"
+          },
+          "5": {
+            "type": "fixed[4]",
+            "value": "deadbeef"
+          },
+          "6": {
+            "type": "binary",
+            "value": "0102ff"
+          }
+        },
+        {
+          "0": {
+            "type": "string",
+            "value": "r2"
+          },
+          "1": {
+            "type": "long",
+            "value": "2"
+          }
+        }
+      ]
+    }
+  ]
+}

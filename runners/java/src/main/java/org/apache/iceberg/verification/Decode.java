@@ -62,7 +62,12 @@ final class Decode {
     return out;
   }
 
-  /** Convert one Iceberg value to a value node. Phase 0-2 covers the base-fixture primitives. */
+  /**
+   * Convert one Iceberg value to a value node. Java is the reference implementation, so the
+   * canonical string encoding chosen here defines the golden the other runners must match:
+   * temporals as ISO-8601 (the java.time toString), decimal as its exact plain string, uuid
+   * lowercase-hyphenated, fixed/binary as lowercase hex.
+   */
   private static Emit.ValueNode node(Type type, Object value) {
     String name = typeName(type);
     return switch (type.typeId()) {
@@ -70,10 +75,38 @@ final class Decode {
       // 64-bit integers as JSON strings.
       case LONG -> Emit.ValueNode.primitive(name, String.valueOf(value));
       case STRING -> Emit.ValueNode.primitive(name, value.toString());
+      // temporals: the generic model returns java.time types whose toString is ISO-8601.
+      // date -> LocalDate (YYYY-MM-DD); time -> LocalTime (HH:MM:SS[.ffffff]);
+      // timestamp -> LocalDateTime; timestamptz -> OffsetDateTime (with offset).
+      case DATE, TIME, TIMESTAMP, TIMESTAMP_NANO ->
+          Emit.ValueNode.primitive(name, value.toString());
+      // decimal -> BigDecimal; toPlainString avoids scientific notation and keeps the scale.
+      case DECIMAL -> Emit.ValueNode.primitive(name, ((java.math.BigDecimal) value).toPlainString());
+      case UUID -> Emit.ValueNode.primitive(name, value.toString()); // lowercase hyphenated
+      case FIXED, BINARY -> Emit.ValueNode.primitive(name, hex(value));
       default ->
           throw new IllegalArgumentException(
               "unsupported type " + type + " for value " + value + " (Phase 4)");
     };
+  }
+
+  /** Lowercase hex of a fixed (byte[]) or binary (ByteBuffer) value, no prefix. */
+  private static String hex(Object value) {
+    byte[] bytes;
+    if (value instanceof byte[] b) {
+      bytes = b;
+    } else if (value instanceof java.nio.ByteBuffer buf) {
+      java.nio.ByteBuffer dup = buf.duplicate();
+      bytes = new byte[dup.remaining()];
+      dup.get(bytes);
+    } else {
+      throw new IllegalArgumentException("cannot hex-encode " + value.getClass());
+    }
+    StringBuilder sb = new StringBuilder(bytes.length * 2);
+    for (byte x : bytes) {
+      sb.append(Character.forDigit((x >> 4) & 0xf, 16)).append(Character.forDigit(x & 0xf, 16));
+    }
+    return sb.toString();
   }
 
   /** Spec type name for the iceberg-schema / value node "type" field. */

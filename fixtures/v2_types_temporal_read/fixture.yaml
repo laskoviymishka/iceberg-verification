@@ -1,0 +1,22 @@
+# Read-conformance fixture — temporal type surface (date/time/timestamp/timestamptz).
+#
+# source: artifact — the runner materializes the checked-in bytes/ (a v2 table
+# minted from seed.yaml via iceberg-java) and scans it read-only. This exercises
+# the DECODE half of the contract for temporal types: an implementation must read
+# each stored value back into the canonical ISO-8601 form. Null rows pin the
+# present-vs-null distinction per column.
+#
+# Golden minted by tools/mint.py from seed.yaml; the golden's ISO renderings are
+# iceberg-java's (the reference). See seed.yaml for the write op-log.
+
+header:
+  id: v2_types_temporal_read
+  format-version: 2
+  spec-anchor: "table-spec#primitive-types"
+  source: artifact
+  artifact:
+    path: .        # bytes/ lives alongside this fixture.yaml
+
+entries:
+  - op: observe
+    at: latest

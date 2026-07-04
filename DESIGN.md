@@ -58,6 +58,35 @@ Byte-equality remains the right tool for **single-implementation regression** (a
 implementation's own output today vs its committed golden). It is the wrong tool *across*
 implementations. This is the same conclusion Arrow reached: compare decoded values.
 
+## Two tracks over one projection: read golden-files and declarative DML
+
+The canonical logical form above is the contract; there are two complementary ways to feed
+it, and they are **parallelizable** — deliberately, so the community can adopt the simpler one
+first without waiting on agreement about op-log semantics.
+
+- **Read golden-files** (`source: artifact`): a checked-in table (metadata + manifests +
+  data files, minted once by the reference implementation) → *static scan* → canonical
+  logical output. This is the low-friction entry point: it needs only a reader, verifies an
+  implementation can *consume* real on-disk features (deletion vectors, position deletes,
+  the full type surface), and is the natural first thing to standardize (the corpus ships
+  the bytes; a runner just scans and the orchestrator compares). Minting is reproducible via
+  `tools/mint.py` (run a seed op-log through the reference runner, snapshot the warehouse).
+- **Declarative DML** (`source: synthesized`): a small base seed (schema + a few rows) →
+  a declarative op-log (`append`/`delete`/`overwrite`/`evolve-schema`/`rewrite`) → canonical
+  output at each observation. This verifies an implementation *produces* spec-compliant
+  metadata across a series of table operations — a strictly harder question than read, and
+  the one where writers most easily diverge (delete strategy, default backfill, snapshot
+  summary semantics).
+
+Both land on the **same** projection — decoded rows keyed by field-id plus the spec-pinned
+snapshot facts — so a single comparator serves both, and a read fixture is literally a DML
+fixture's output frozen to disk (`tools/mint.py` mints one from the other). The read track is
+the community-first, adopt-in-CI step; the DML track runs in parallel and reaches deeper. New
+data types (timestamps, decimal, uuid, binary today; variant / geometry / geography as a named
+longer-term goal — e.g. a `!variant` column authored today already parses, it just awaits
+decode) are exercised on **whichever** track — the type coverage is a property of the
+projection, not of how the table was produced.
+
 ## The runner is emit-only
 
 A runner reads an op-log, executes it via one implementation's native API, and emits

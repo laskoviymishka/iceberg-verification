@@ -122,7 +122,9 @@ final class TypedValue {
       case STRING -> scalar;
       case UUID -> UUID.fromString(scalar);
       case DECIMAL -> new BigDecimal(scalar);
-      case FIXED, BINARY -> ByteBuffer.wrap(hexToBytes(scalar));
+      // Iceberg's generic model expects a raw byte[] for FIXED but a ByteBuffer for BINARY.
+      case FIXED -> hexToBytes(scalar);
+      case BINARY -> ByteBuffer.wrap(hexToBytes(scalar));
       default -> throw new IllegalArgumentException("unsupported primitive type " + type);
     };
   }

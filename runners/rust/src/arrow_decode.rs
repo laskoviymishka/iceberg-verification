@@ -26,9 +26,11 @@ use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Result, anyhow, bail};
 use arrow_array::{
-    Array, BooleanArray, Float32Array, Float64Array, Int32Array, Int64Array, RecordBatch,
-    StringArray,
+    Array, BinaryArray, BooleanArray, Date32Array, Decimal128Array, FixedSizeBinaryArray,
+    Float32Array, Float64Array, Int32Array, Int64Array, LargeBinaryArray, RecordBatch, StringArray,
+    Time64MicrosecondArray, TimestampMicrosecondArray,
 };
+use arrow_schema::DataType;
 use iceberg::spec::NestedFieldRef;
 
 use crate::emit::{DecodedRow, SchemaField, ValueNode};
@@ -125,6 +127,51 @@ fn decode_cell(arr: &dyn Array, i: usize, type_name: &str) -> Result<Option<Valu
             value: json_number_f64(a.value(i))?,
         }));
     }
+    // Temporals: chrono's Naive* Display is ISO-8601, matching the java reference
+    // (LocalDate/LocalTime/LocalDateTime). tz-aware timestamps render UTC with "Z".
+    if let Some(a) = arr.as_any().downcast_ref::<Date32Array>() {
+        if let Some(d) = a.value_as_date(i) {
+            return Ok(Some(str_node(type_name, d.to_string())));
+        }
+    }
+    if let Some(a) = arr.as_any().downcast_ref::<Time64MicrosecondArray>() {
+        if let Some(t) = a.value_as_time(i) {
+            return Ok(Some(str_node(type_name, t.to_string())));
+        }
+    }
+    if let Some(a) = arr.as_any().downcast_ref::<TimestampMicrosecondArray>() {
+        if let Some(dt) = a.value_as_datetime(i) {
+            // A non-empty timezone in the arrow type means iceberg timestamptz.
+            let is_tz = matches!(a.data_type(), DataType::Timestamp(_, Some(_)));
+            let s = if is_tz {
+                format!("{}Z", dt.format("%Y-%m-%dT%H:%M:%S%.f"))
+            } else {
+                dt.to_string().replace(' ', "T")
+            };
+            return Ok(Some(str_node(type_name, s)));
+        }
+    }
+    // decimal: exact string with the type's scale (matches BigDecimal.toPlainString).
+    if let Some(a) = arr.as_any().downcast_ref::<Decimal128Array>() {
+        return Ok(Some(str_node(type_name, a.value_as_string(i))));
+    }
+    // uuid and fixed both surface as fixed-size binary. iceberg-rust hands uuid
+    // through as raw 16 bytes, so distinguish on the iceberg type: a uuid renders
+    // as the canonical hyphenated form, a fixed as lowercase hex.
+    if let Some(a) = arr.as_any().downcast_ref::<FixedSizeBinaryArray>() {
+        let bytes = a.value(i);
+        if type_name == "uuid" && bytes.len() == 16 {
+            return Ok(Some(str_node(type_name, uuid_string(bytes))));
+        }
+        return Ok(Some(str_node(type_name, hex_encode(bytes))));
+    }
+    if let Some(a) = arr.as_any().downcast_ref::<BinaryArray>() {
+        return Ok(Some(str_node(type_name, hex_encode(a.value(i)))));
+    }
+    // iceberg-rust's scan surfaces binary as LargeBinary (64-bit offsets).
+    if let Some(a) = arr.as_any().downcast_ref::<LargeBinaryArray>() {
+        return Ok(Some(str_node(type_name, hex_encode(a.value(i)))));
+    }
     bail!(
         "unsupported arrow type {:?} for iceberg type {type_name} (Phase 4)",
         arr.data_type()
@@ -137,4 +184,35 @@ fn json_number_f64(v: f64) -> Result<serde_json::Value> {
     serde_json::Number::from_f64(v)
         .map(serde_json::Value::Number)
         .ok_or_else(|| anyhow!("non-finite float {v} has no JSON representation"))
+}
+
+/// A string-valued ValueNode with the given spec type name.
+fn str_node(type_name: &str, value: String) -> ValueNode {
+    ValueNode {
+        type_name: type_name.to_string(),
+        value: serde_json::Value::String(value),
+    }
+}
+
+/// Lowercase hex of a byte slice, no prefix (matches the java/go hex encoders).
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
+
+/// Canonical hyphenated uuid (8-4-4-4-12) from 16 raw bytes, matching java's
+/// UUID.toString.
+fn uuid_string(b: &[u8]) -> String {
+    let h = hex_encode(b);
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[0..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..32]
+    )
 }

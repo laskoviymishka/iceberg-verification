@@ -27,3 +27,5 @@ __pycache__/
 # built orchestrator binary
 /orch
 /orchestrator/orch
+# Hadoop checksum sidecars (write-tool noise; never part of a minted fixture)
+*.crc

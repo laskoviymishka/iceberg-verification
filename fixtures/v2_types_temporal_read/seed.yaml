@@ -1,0 +1,39 @@
+# Mint seed (NOT executed by runners) — the synthesized write op-log that
+# tools/mint.py runs through iceberg-java to produce this fixture's bytes/ +
+# golden. Runners execute the sibling artifact-mode fixture.yaml instead.
+#
+# Covers the v2 temporal type surface: date, time, timestamp (no tz),
+# timestamptz, plus a null row for each.
+
+header:
+  id: v2_types_temporal_read
+  format-version: 2
+  spec-anchor: "table-spec#primitive-types"
+  table-uuid: "3b4c5d6e-7f80-9122-3344-556677889900"
+  seeds:
+    snapshot-id: sequential
+    commit-ts: "2026-01-01T00:00:00Z"
+    file-paths: templated
+  schema:
+    fields:
+      - { id: 1, name: id,    type: long, required: true }
+      - { id: 2, name: d,     type: date }
+      - { id: 3, name: t,     type: time }
+      - { id: 4, name: ts,    type: timestamp }
+      - { id: 5, name: tstz,  type: timestamptz }
+
+entries:
+  - op: append
+    rows:
+      - __rowkey: r1
+        id:   !long 1
+        d:    !date "2026-01-15"
+        t:    !time "12:30:45"
+        ts:   !timestamp "2026-01-15T12:30:45"
+        tstz: !timestamptz "2026-01-15T12:30:45+00:00"
+      - __rowkey: r2
+        id:   !long 2
+        d:    !null null
+        t:    !null null
+        ts:   !null null
+        tstz: !null null

@@ -1,0 +1,79 @@
+{
+  "spec-id": "v2_types_temporal_read",
+  "accept": true,
+  "observations": [
+    {
+      "at": "latest",
+      "iceberg-schema": [
+        {
+          "field-id": 0,
+          "name": "__rowkey",
+          "type": "string"
+        },
+        {
+          "field-id": 1,
+          "name": "id",
+          "type": "long"
+        },
+        {
+          "field-id": 2,
+          "name": "d",
+          "type": "date"
+        },
+        {
+          "field-id": 3,
+          "name": "t",
+          "type": "time"
+        },
+        {
+          "field-id": 4,
+          "name": "ts",
+          "type": "timestamp"
+        },
+        {
+          "field-id": 5,
+          "name": "tstz",
+          "type": "timestamptz"
+        }
+      ],
+      "decoded-rows": [
+        {
+          "0": {
+            "type": "string",
+            "value": "r1"
+          },
+          "1": {
+            "type": "long",
+            "value": "1"
+          },
+          "2": {
+            "type": "date",
+            "value": "2026-01-15"
+          },
+          "3": {
+            "type": "time",
+            "value": "12:30:45"
+          },
+          "4": {
+            "type": "timestamp",
+            "value": "2026-01-15T12:30:45"
+          },
+          "5": {
+            "type": "timestamptz",
+            "value": "2026-01-15T12:30:45Z"
+          }
+        },
+        {
+          "0": {
+            "type": "string",
+            "value": "r2"
+          },
+          "1": {
+            "type": "long",
+            "value": "2"
+          }
+        }
+      ]
+    }
+  ]
+}
