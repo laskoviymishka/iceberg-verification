@@ -134,6 +134,8 @@ jobs:
           name: conformance-report
           path: site
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true # self-provision the Pages site (repo has none yet)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
