@@ -77,6 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: orchestrator/go.sum
       - uses: actions/setup-java@v4 # java runner launcher needs a JRE at runtime
         with:
           distribution: temurin
@@ -97,14 +101,18 @@ jobs:
         run: |
           chmod +x bin/go/runner bin/rust/runner
           chmod +x bin/java/bin/iceberg-verification-runner
+      - name: build orchestrator
+        working-directory: orchestrator
+        run: go build -o ../orch .
       - name: run orchestrator
         run: |
-          python3 orchestrator/run.py --corpus . --out site/report.json \
+          ./orch --corpus . --out site/report.json \
             --runner go=bin/go/runner \
             --runner rust=bin/rust/runner \
             --runner java=bin/java/bin/iceberg-verification-runner
       - name: show matrix summary
-        run: python3 -c "import json;r=json.load(open('site/report.json'));c={}; [c.__setitem__(x['status'],c.get(x['status'],0)+1) for x in r['cells']];print('matrix:',c)"
+        run: |
+          python3 -c "import json;r=json.load(open('site/report.json'));c={};[c.__setitem__(x['status'],c.get(x['status'],0)+1) for x in r['cells']];print('matrix:',c)"
       - uses: actions/upload-artifact@v4
         with:
           name: conformance-report

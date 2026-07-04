@@ -24,3 +24,6 @@ __pycache__/
 *.pyc
 # CI scratch (downloaded runner binaries / staged java image)
 /dist/
+# built orchestrator binary
+/orch
+/orchestrator/orch
