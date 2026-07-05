@@ -35,14 +35,33 @@ type readerBin struct {
 	bin  string
 }
 
+// FuzzReport is the machine-readable result of a read-diff campaign, merged
+// into report.json by the orchestrator (--fuzz) and rendered by the site. Its
+// JSON shape is a contract with site/app.js.
+type FuzzReport struct {
+	Seeds         int           `json:"seeds"`
+	Readers       []string      `json:"readers"`
+	Ops           int           `json:"ops"`
+	FormatVersion int           `json:"format_version"`
+	Divergences   []FuzzFinding `json:"divergences"`
+}
+
+// FuzzFinding is one reader diverging from the Java reference on one seed.
+type FuzzFinding struct {
+	Seed    int64  `json:"seed"`
+	Reader  string `json:"reader"`
+	Verdict string `json:"verdict"` // reader-bug | escalate
+	Detail  string `json:"detail"`
+}
+
 // runReadDiff generates op-logs, mints each into a real table with the Java
 // reference, then points every reader at the minted bytes and diffs their
 // canonical scan against Java's — a majority vote triages each divergence.
 //
 //	fuzz readdiff --java <bin> --reader go=<bin> --reader rust=<bin> \
-//	    --seeds N [--from S] [--ops K] [--format-version V]
+//	    --seeds N [--from S] [--ops K] [--format-version V] [--json <path>]
 func runReadDiff(args []string) error {
-	var javaBin string
+	var javaBin, jsonOut string
 	var readers []readerBin
 	seeds, from, ops, fmtVer := 50, int64(1), 12, 2
 	for i := 0; i < len(args); i++ {
@@ -66,6 +85,9 @@ func runReadDiff(args []string) error {
 		case "--format-version":
 			i++
 			fmtVer = atoi(args[i])
+		case "--json":
+			i++
+			jsonOut = args[i]
 		default:
 			return fmt.Errorf("unknown arg %q", args[i])
 		}
@@ -75,7 +97,10 @@ func runReadDiff(args []string) error {
 	}
 
 	feat := generator.Features{Delete: true, Promote: fmtVer >= 2, WideTypes: true}
-	var divergences int
+	report := FuzzReport{Seeds: seeds, Ops: ops, FormatVersion: fmtVer}
+	for _, rd := range readers {
+		report.Readers = append(report.Readers, rd.name)
+	}
 	for s := from; s < from+int64(seeds); s++ {
 		log := generator.Generate(s, fmtVer, ops, feat)
 		findings, err := readDiffSeed(javaBin, readers, s, log)
@@ -84,11 +109,23 @@ func runReadDiff(args []string) error {
 			continue
 		}
 		for _, f := range findings {
-			divergences++
+			report.Divergences = append(report.Divergences, FuzzFinding{
+				Seed: s, Reader: f.reader, Verdict: f.verdict, Detail: f.detail,
+			})
 			fmt.Printf("  seed %d [%s] %s: %s\n", s, f.verdict, f.reader, f.detail)
 		}
 	}
-	fmt.Printf("\n=== %d seeds x %d readers: %d divergence(s) ===\n", seeds, len(readers), divergences)
+	fmt.Printf("\n=== %d seeds x %d readers: %d divergence(s) ===\n", seeds, len(readers), len(report.Divergences))
+
+	if jsonOut != "" {
+		buf, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(jsonOut, append(buf, '\n'), 0o644); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -40,6 +40,7 @@ async function boot() {
   document.getElementById("generated-at").textContent = REPORT.generated_at || "—";
   renderLegend();
   renderSummary();
+  renderFuzz();
   renderMatrix();
   renderCounts();
   window.addEventListener("hashchange", route);
@@ -72,6 +73,44 @@ function renderSummary() {
     `<div class="tile"><div class="tile-num" style="color:var(--accent)">${REPORT.fixtures.length}×${REPORT.runners.length}</div><div class="tile-label">fixtures × impls</div></div>`
   );
   document.getElementById("summary").innerHTML = tiles.join("");
+}
+
+// renderFuzz shows the read-diff fuzz campaign (when report.json carries a
+// `fuzz` section) as its own panel above the matrix: headline stats plus each
+// divergence the generator surfaced. Absent => panel stays empty (backward-safe).
+function renderFuzz() {
+  const el = document.getElementById("fuzz-panel");
+  const f = REPORT.fuzz;
+  if (!f) {
+    el.innerHTML = "";
+    return;
+  }
+  const divs = f.divergences || [];
+  const findings = divs
+    .map((d) => {
+      const cls = d.verdict === "escalate" ? "s-undeclared-gap" : "s-fail";
+      return `<li class="fuzz-finding">
+        <span class="fuzz-dot ${cls}"></span>
+        <span class="fuzz-seed">seed ${d.seed}</span>
+        <span class="fuzz-reader">${esc(d.reader)}</span>
+        <span class="fuzz-verdict ${cls}">${esc(d.verdict)}</span>
+        <span class="fuzz-detail">${esc(d.detail)}</span>
+      </li>`;
+    })
+    .join("");
+  const clean = divs.length === 0;
+  el.innerHTML = `
+    <div class="panel fuzz${clean ? " fuzz-clean" : ""}">
+      <div class="fuzz-head">
+        <h3>differential fuzzing — read-diff campaign</h3>
+        <div class="fuzz-stat">
+          <span class="fuzz-num">${f.seeds}</span> seeds fuzzed ·
+          <span class="fuzz-num ${clean ? "s-pass" : "s-fail"}">${divs.length}</span> divergence${divs.length === 1 ? "" : "s"}
+          <span class="fuzz-meta">random valid op-logs → java mints → ${(f.readers || []).join(" / ")} read → diff vs java</span>
+        </div>
+      </div>
+      ${clean ? `<p class="fuzz-empty">no divergences this run — every reader agreed with the java reference.</p>` : `<ul class="fuzz-list">${findings}</ul>`}
+    </div>`;
 }
 
 // axis groups fixtures by format-version then read/write, so the matrix reads

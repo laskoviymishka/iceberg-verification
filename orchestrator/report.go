@@ -17,6 +17,8 @@
 
 package main
 
+import "encoding/json"
+
 // Report is the single artifact the front-face renders. Its shape is a
 // contract with site/app.js — keep field names/tags stable.
 type Report struct {
@@ -25,6 +27,10 @@ type Report struct {
 	Runners     []RunnerInfo `json:"runners"`
 	Fixtures    []Fixture    `json:"fixtures"`
 	Cells       []Cell       `json:"cells"`
+	// Fuzz holds a read-diff campaign result (see fuzz.FuzzReport), attached via
+	// the orchestrator's --fuzz flag. Kept as raw JSON so the orchestrator stays
+	// decoupled from the fuzz package; the site renders it. Omitted when absent.
+	Fuzz json.RawMessage `json:"fuzz,omitempty"`
 }
 
 type RunnerInfo struct {

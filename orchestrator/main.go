@@ -63,6 +63,7 @@ func main() {
 func run() error {
 	corpus := "."
 	outPath := "report.json"
+	fuzzPath := ""
 	var runners runnerFlags
 	// tiny hand-rolled flag parse (avoids flag pkg's single-value limit noise)
 	args := os.Args[1:]
@@ -77,6 +78,9 @@ func run() error {
 		case "--runner":
 			i++
 			runners = append(runners, args[i])
+		case "--fuzz":
+			i++
+			fuzzPath = args[i]
 		default:
 			return fmt.Errorf("unknown arg %q", args[i])
 		}
@@ -134,6 +138,19 @@ func run() error {
 		report.Fixtures = append(report.Fixtures, fx.Fixture)
 	}
 	report.Cells = cells
+
+	// Attach a read-diff fuzz campaign result if one was produced (--fuzz). Kept
+	// as raw JSON: the orchestrator does not interpret it, the site renders it.
+	if fuzzPath != "" {
+		fb, ferr := os.ReadFile(fuzzPath)
+		if ferr != nil {
+			return fmt.Errorf("read --fuzz %s: %w", fuzzPath, ferr)
+		}
+		if !json.Valid(fb) {
+			return fmt.Errorf("--fuzz %s is not valid JSON", fuzzPath)
+		}
+		report.Fuzz = json.RawMessage(fb)
+	}
 
 	buf, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {

@@ -104,12 +104,26 @@ jobs:
         run: |
           chmod +x bin/go/runner bin/rust/runner
           chmod +x bin/java/bin/iceberg-verification-runner
-      - name: build orchestrator
+      - name: build orchestrator + fuzz
         working-directory: orchestrator
-        run: go build -o ../orch .
+        run: |
+          go build -o ../orch .
+          go build -o ../fuzz ./fuzz
+      - name: run read-diff fuzz campaign (non-blocking)
+        # A bounded inline campaign: generate valid op-logs, mint each with the
+        # java reference, diff every reader against it. Findings are reported in
+        # the matrix site, never gate the build — so a `|| true` guard keeps a
+        # divergence (or a flake) from failing CI. Deeper nightly run is future work.
+        run: |
+          ./fuzz readdiff \
+            --java bin/java/bin/iceberg-verification-runner \
+            --reader go=bin/go/runner \
+            --reader rust=bin/rust/runner \
+            --seeds 25 --ops 8 --json fuzz.json || true
+          test -f fuzz.json && echo "fuzz.json produced" || echo '{"seeds":0,"readers":[],"ops":0,"format_version":0,"divergences":[]}' > fuzz.json
       - name: run orchestrator
         run: |
-          ./orch --corpus . --out site/report.json \
+          ./orch --corpus . --out site/report.json --fuzz fuzz.json \
             --runner go=bin/go/runner \
             --runner rust=bin/rust/runner \
             --runner java=bin/java/bin/iceberg-verification-runner
