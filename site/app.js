@@ -45,7 +45,6 @@ async function boot() {
   renderCounts();
   window.addEventListener("hashchange", route);
   route();
-  wireTheme();
 }
 
 function cellFor(fixture, runner) {
@@ -86,19 +85,22 @@ function renderFuzz() {
     return;
   }
   const divs = f.divergences || [];
-  const findings = divs
-    .map((d) => {
-      const cls = d.verdict === "escalate" ? "s-undeclared-gap" : "s-fail";
-      return `<li class="fuzz-finding">
-        <span class="fuzz-dot ${cls}"></span>
-        <span class="fuzz-seed">seed ${d.seed}</span>
-        <span class="fuzz-reader">${esc(d.reader)}</span>
-        <span class="fuzz-verdict ${cls}">${esc(d.verdict)}</span>
-        <span class="fuzz-detail">${esc(d.detail)}</span>
-      </li>`;
+  const cases = f.cases || [];
+  const clean = divs.length === 0;
+
+  // A roster of every generated seed as a clickable chip, colored by status —
+  // so the panel shows what all N tests were, not only the divergences. Each
+  // chip routes to a detail view with the exact (reproducible) op-log.
+  const chips = cases
+    .map((c) => {
+      const cls =
+        c.status === "divergent" ? "s-fail" : c.status === "setup-error" ? "s-undeclared-gap" : "s-pass";
+      return `<button class="fuzz-chip ${cls}" onclick="location.hash='#/fuzz/${c.seed}'" title="${esc(c.summary)}">
+        <span class="fuzz-dot ${cls}"></span>seed ${c.seed}
+      </button>`;
     })
     .join("");
-  const clean = divs.length === 0;
+
   el.innerHTML = `
     <div class="panel fuzz${clean ? " fuzz-clean" : ""}">
       <div class="fuzz-head">
@@ -106,10 +108,50 @@ function renderFuzz() {
         <div class="fuzz-stat">
           <span class="fuzz-num">${f.seeds}</span> seeds fuzzed ·
           <span class="fuzz-num ${clean ? "s-pass" : "s-fail"}">${divs.length}</span> divergence${divs.length === 1 ? "" : "s"}
-          <span class="fuzz-meta">random valid op-logs → java mints → ${(f.readers || []).join(" / ")} read → diff vs java</span>
+          <span class="fuzz-meta">random valid op-logs → java mints → ${(f.readers || []).join(" / ")} read → diff vs java · each seed is a deterministic, reproducible test</span>
         </div>
       </div>
-      ${clean ? `<p class="fuzz-empty">no divergences this run — every reader agreed with the java reference.</p>` : `<ul class="fuzz-list">${findings}</ul>`}
+      ${cases.length ? `<div class="fuzz-roster">${chips}</div>` : ""}
+      ${clean ? `<p class="fuzz-empty">no divergences this run — every reader agreed with the java reference.</p>` : ""}
+    </div>`;
+}
+
+// renderFuzzCase shows one generated seed's detail: what it exercised, each
+// reader's verdict, and the exact op-log YAML — a complete reproducer, since
+// the generator is deterministic from the seed. Mirrors the fixture page.
+function renderFuzzCase(c) {
+  const readers = (c.results || [])
+    .map((r) => {
+      const cls =
+        r.verdict === "ok" ? "s-pass" : r.verdict === "escalate" ? "s-undeclared-gap" : "s-fail";
+      return `<div class="result-row ${cls}" style="border-left-color:currentColor">
+        <span class="dot"></span>
+        <span class="r-name" style="color:var(--ink)">${esc(r.reader)}</span>
+        <span class="r-status">${esc(r.verdict)}</span>
+      </div>${r.detail ? `<div class="result-detail">${esc(r.detail)}</div>` : ""}`;
+    })
+    .join("");
+
+  document.getElementById("fixture-view").innerHTML = `
+    <button class="back" onclick="location.hash=''">← matrix</button>
+    <div class="fixture-head">
+      <h2>fuzz · seed ${c.seed}</h2>
+      <div class="badges">
+        <span class="badge">${esc(c.summary)}</span>
+        <span class="badge">${c.ops} ops</span>
+        <span class="badge ${c.status === "divergent" ? "hot" : ""}">${c.status}</span>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div>
+        <div class="panel"><h3>reader verdicts</h3><div class="results">${readers}</div></div>
+      </div>
+      <div>
+        <div class="panel"><h3>generated op-log — deterministic reproducer</h3>
+          <p class="repro-note">This exact op-log is regenerated from <code>seed ${c.seed}</code>; run it through any runner to reproduce.</p>
+          <pre class="code">${esc(c.yaml)}</pre>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -178,11 +220,12 @@ function renderCounts() {
 
 // ---- routing ----
 function route() {
-  const m = location.hash.match(/^#\/fixture\/(.+)$/);
   const matrix = document.getElementById("matrix-view");
   const detail = document.getElementById("fixture-view");
-  if (m) {
-    const fx = REPORT.fixtures.find((f) => f.id === decodeURIComponent(m[1]));
+
+  const mf = location.hash.match(/^#\/fixture\/(.+)$/);
+  if (mf) {
+    const fx = REPORT.fixtures.find((f) => f.id === decodeURIComponent(mf[1]));
     if (fx) {
       matrix.hidden = true;
       detail.hidden = false;
@@ -191,6 +234,19 @@ function route() {
       return;
     }
   }
+
+  const mz = location.hash.match(/^#\/fuzz\/(\d+)$/);
+  if (mz && REPORT.fuzz) {
+    const c = (REPORT.fuzz.cases || []).find((x) => String(x.seed) === mz[1]);
+    if (c) {
+      matrix.hidden = true;
+      detail.hidden = false;
+      renderFuzzCase(c);
+      window.scrollTo(0, 0);
+      return;
+    }
+  }
+
   matrix.hidden = false;
   detail.hidden = true;
 }
@@ -289,16 +345,6 @@ function renderDetail(c) {
 
 function esc(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-}
-
-function wireTheme() {
-  const btn = document.getElementById("theme-toggle");
-  btn.addEventListener("click", () => {
-    const root = document.documentElement;
-    const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
-    root.setAttribute("data-theme", next);
-    btn.textContent = next === "light" ? "☀" : "☾";
-  });
 }
 
 boot();

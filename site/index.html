@@ -3,7 +3,7 @@
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements. Licensed under the Apache License 2.0.
 -->
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,8 +14,9 @@
     <title>Iceberg Conformance Matrix</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Match the apache/iceberg.org type system: Lato for UI, Roboto Mono for code/data. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Roboto+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
     <!-- ?v=__BUILD__ is replaced with the commit SHA at deploy time (CI sed step)
@@ -24,19 +25,18 @@
     <link rel="stylesheet" href="style.css?v=__BUILD__" />
   </head>
   <body>
-    <div class="grain" aria-hidden="true"></div>
-
     <header class="masthead">
       <div class="masthead-row">
         <div class="wordmark">
-          <span class="wordmark-glyph" aria-hidden="true">◈</span>
-          <div>
-            <h1>Iceberg&nbsp;Conformance</h1>
+          <!-- Official Apache Iceberg logo (vendored from apache/iceberg; this is an
+               Iceberg-ecosystem conformance POC). -->
+          <img class="logo" src="assets/iceberg-logo.svg" alt="Apache Iceberg" />
+          <div class="wordmark-text">
+            <h1>Conformance</h1>
             <p class="tagline">cross-implementation DML &amp; read matrix</p>
           </div>
         </div>
         <div class="masthead-meta">
-          <button id="theme-toggle" class="theme-toggle" title="toggle theme" aria-label="toggle theme">☾</button>
           <div class="meta-block">
             <span class="meta-label">generated</span>
             <span id="generated-at" class="meta-value">—</span>

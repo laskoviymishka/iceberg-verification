@@ -317,3 +317,37 @@ func randString(r *rand.Rand) string {
 }
 
 func sortStrings(s []string) { sort.Strings(s) }
+
+// OpSummary renders a compact human description of what a generated op-log
+// exercises, e.g. "append×3, delete, promote int→long, observe×2". Ops of the
+// same kind are counted; promote/delete carry a hint of their target.
+func OpSummary(log OpLog) string {
+	counts := map[string]int{}
+	order := []string{}
+	extra := map[string]string{}
+	for _, op := range log.Ops {
+		k := op.Kind
+		if _, seen := counts[k]; !seen {
+			order = append(order, k)
+		}
+		counts[k]++
+		switch k {
+		case "promote":
+			extra[k] = "→" + op.To
+		case "delete":
+			extra[k] = " " + op.Predicate.Term + "=" + op.Predicate.Value.Scalar
+		}
+	}
+	parts := make([]string, 0, len(order))
+	for _, k := range order {
+		label := k
+		if counts[k] > 1 {
+			label = fmt.Sprintf("%s×%d", k, counts[k])
+		}
+		if e := extra[k]; e != "" && counts[k] == 1 {
+			label += e
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, ", ")
+}

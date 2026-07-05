@@ -44,6 +44,10 @@ type FuzzReport struct {
 	Ops           int           `json:"ops"`
 	FormatVersion int           `json:"format_version"`
 	Divergences   []FuzzFinding `json:"divergences"`
+	// Cases records EVERY generated seed (not just the diverging ones) so the
+	// site can show exactly what each of the N tests exercised — and, since the
+	// generator is deterministic, the op-log YAML here is a complete reproducer.
+	Cases []FuzzCase `json:"cases"`
 }
 
 // FuzzFinding is one reader diverging from the Java reference on one seed.
@@ -52,6 +56,24 @@ type FuzzFinding struct {
 	Reader  string `json:"reader"`
 	Verdict string `json:"verdict"` // reader-bug | escalate
 	Detail  string `json:"detail"`
+}
+
+// FuzzCase is one generated seed's full record: a human summary of what it
+// exercised, the exact op-log YAML (the reproducer), and each reader's verdict.
+type FuzzCase struct {
+	Seed    int64        `json:"seed"`
+	Ops     int          `json:"ops"`     // op count in the generated log
+	Summary string       `json:"summary"` // e.g. "append×3, delete, promote, observe×2"
+	YAML    string       `json:"yaml"`    // the generated op-log (deterministic repro)
+	Results []FuzzResult `json:"results"` // per-reader outcome
+	Status  string       `json:"status"`  // "ok" | "divergent" | "setup-error"
+}
+
+// FuzzResult is one reader's outcome on one seed.
+type FuzzResult struct {
+	Reader  string `json:"reader"`
+	Verdict string `json:"verdict"` // ok | reader-bug | escalate
+	Detail  string `json:"detail,omitempty"`
 }
 
 // runReadDiff generates op-logs, mints each into a real table with the Java
@@ -103,17 +125,39 @@ func runReadDiff(args []string) error {
 	}
 	for s := from; s < from+int64(seeds); s++ {
 		log := generator.Generate(s, fmtVer, ops, feat)
+		c := FuzzCase{
+			Seed:    s,
+			Ops:     len(log.Ops),
+			Summary: generator.OpSummary(log),
+			YAML:    generator.EmitYAML(fmt.Sprintf("fuzz_%d", s), log),
+			Status:  "ok",
+		}
 		findings, err := readDiffSeed(javaBin, readers, s, log)
 		if err != nil {
+			c.Status = "setup-error"
+			c.Results = append(c.Results, FuzzResult{Reader: "-", Verdict: "escalate", Detail: err.Error()})
+			report.Cases = append(report.Cases, c)
 			fmt.Printf("  seed %d: SETUP ERROR: %s\n", s, err)
 			continue
 		}
+		// index findings by reader so passing readers are recorded as "ok" too.
+		byReader := map[string]finding{}
 		for _, f := range findings {
-			report.Divergences = append(report.Divergences, FuzzFinding{
-				Seed: s, Reader: f.reader, Verdict: f.verdict, Detail: f.detail,
-			})
-			fmt.Printf("  seed %d [%s] %s: %s\n", s, f.verdict, f.reader, f.detail)
+			byReader[f.reader] = f
 		}
+		for _, rd := range readers {
+			if f, bad := byReader[rd.name]; bad {
+				c.Results = append(c.Results, FuzzResult{Reader: rd.name, Verdict: f.verdict, Detail: f.detail})
+				c.Status = "divergent"
+				report.Divergences = append(report.Divergences, FuzzFinding{
+					Seed: s, Reader: f.reader, Verdict: f.verdict, Detail: f.detail,
+				})
+				fmt.Printf("  seed %d [%s] %s: %s\n", s, f.verdict, f.reader, f.detail)
+			} else {
+				c.Results = append(c.Results, FuzzResult{Reader: rd.name, Verdict: "ok"})
+			}
+		}
+		report.Cases = append(report.Cases, c)
 	}
 	fmt.Printf("\n=== %d seeds x %d readers: %d divergence(s) ===\n", seeds, len(readers), len(report.Divergences))
 
